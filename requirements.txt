@@ -1,6 +1,10 @@
-streamlit
 yfinance
 numpy
 pandas
 plotly
 scikit-learn
+scipy
+streamlit
+matplotlib
+# optional: LLM generation step (python -m market_rag.cli query --llm)
+# anthropic
