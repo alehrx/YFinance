@@ -67,6 +67,8 @@ def logistic_baseline(kb: pd.DataFrame, cfg: RAGConfig, test_start, test_end=Non
             q &= kb["news_text"].str.len() > 0
         qi = np.flatnonzero(q)
         qi = qi[::step]
+        if len(qi) == 0:
+            continue
         p = clf.predict_proba(Z.iloc[qi])[:, 1]
         rows.append(pd.DataFrame(dict(p_up=p, exp_ret=p - 0.5, actual=y.iloc[qi].to_numpy(),
                                       base_rate=float((y[tr] > 0).mean())), index=kb.index[qi]))
@@ -93,7 +95,9 @@ def score(preds: pd.DataFrame) -> dict:
 def strategy(close: pd.Series, preds: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
     """Hold the index when P(up) >= threshold, else cash; re-decide at each query date."""
     r = close.pct_change().shift(-1)  # return earned from holding at close t to t+1
-    pos = (preds["p_up"] >= threshold).astype(float).reindex(close.index).ffill()
+    # a decision is valid until the next query; if the model is silent for longer than
+    # ~3 weeks (e.g. no headlines in a news-only window) default back to holding the index
+    pos = (preds["p_up"] >= threshold).astype(float).reindex(close.index).ffill(limit=15).fillna(1.0)
     span = (close.index >= preds.index[0]) & (close.index <= preds.index[-1])
     r, pos = r[span].fillna(0), pos[span].fillna(0)
     return pd.DataFrame({"buy_hold": (1 + r).cumprod(), "rag_timing": (1 + r * pos).cumprod(),

@@ -64,6 +64,9 @@ def main():
     ap.add_argument("--only", default="", help="'metrics' or 'news'")
     ap.add_argument("--metric-horizons", default="21,63,252")
     ap.add_argument("--news-horizons", default="5,21")
+    ap.add_argument("--summarize", action="store_true",
+                    help="skip running; rebuild the results table from reports/preds_*.csv")
+    ap.add_argument("--names", default="", help="run only these experiment names (comma list)")
     args = ap.parse_args()
     OUT.mkdir(exist_ok=True)
     kb = load_kb(args.offline, args.rebuild)
@@ -71,14 +74,22 @@ def main():
     hb = [] if args.only == "metrics" else [int(x) for x in args.news_horizons.split(",") if x]
 
     rows, curves = {}, {}
+    names = set(filter(None, args.names.split(",")))
     for name, h, kind, ckw, wkw in experiments(ha, hb):
+        if names and name not in names:
+            continue
         cfg = RAGConfig(horizon=h, min_coverage=0.3, **ckw)
         print(f"\n=== {name} ===")
-        if kind == "rag":
+        pred_path = OUT / f"preds_{name}.csv"
+        if args.summarize:
+            if not pred_path.exists():
+                continue
+            p = pd.read_csv(pred_path, index_col=0, parse_dates=True)
+        elif kind == "rag":
             p = walk_forward(kb, cfg, verbose=False, **wkw)
         else:
             p = logistic_baseline(kb, cfg, **wkw)
-        p.to_csv(OUT / f"preds_{name}.csv")
+        p.to_csv(pred_path)
         s = score(p)
         eq = strategy(kb["close"], p)
         curves[name] = eq
@@ -103,7 +114,7 @@ def main():
         import matplotlib.pyplot as plt
 
         series = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # fixed categorical order
-        groups = sorted({n.split("_")[0] for n in curves})
+        groups = sorted({n.split("_")[0] for n in curves}, key=lambda g: (g[0], int(g[1:])))
         fig, axes = plt.subplots(len(groups), 1, figsize=(10, 3.2 * len(groups)), squeeze=False)
         for ax, g in zip(axes[:, 0], groups):
             members = [n for n in curves if n.split("_")[0] == g]
