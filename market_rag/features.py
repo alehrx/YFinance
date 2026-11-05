@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 
 TECH_COLUMNS = [
+    "ret_1d",         # last day's return
+    "ret_5d",         # last week's return
     "px_vs_ma50",     # close / 50-day SMA - 1
     "px_vs_ma200",    # close / 200-day SMA - 1
     "ma50_vs_ma200",  # golden / death cross distance
@@ -30,7 +32,22 @@ VALUATION_COLUMNS = [
     "rate_10y",
     "vix",
 ]
-NEWS_COLUMNS = ["news_tone", "news_tone_chg", "news_count"]
+# Event themes: share of the week's headlines about each theme, and its novelty
+# (share minus its own trailing ~3-month average, so a sudden surge stands out
+# regardless of which outlet / era the headlines come from).
+THEMES = {
+    "pandemic": r"virus|coronavirus|covid|pandemic|outbreak|epidemic|ebola|h1n1|swine flu|\bsars\b|quarantine|lockdown",
+    "banking": r"bailout|credit crunch|subprime|lehman|liquidity|insolven|bankrupt|financial crisis|contagion"
+               r"|bank (?:run|failure|collapse|rescue)|banks? (?:fail|collapse)|default",
+    "war": r"\bwar\b|missile|invasion|invade|military|troops|airstrike|nuclear|terror",
+    "trade": r"tariff|trade war|trade talks|trade deal|sanction|export ban",
+    "central_bank": r"\bfed\b|federal reserve|rate hike|rate cut|interest rate|powell|yellen|bernanke|\becb\b"
+                    r"|central bank|inflation",
+    "recession": r"recession|slowdown|unemployment|jobless|layoff|downturn|contraction|\bgdp\b",
+    "energy": r"\boil\b|crude|opec|gas price",
+}
+THEME_COLUMNS = [f"theme_{t}" for t in THEMES] + [f"theme_{t}_nov" for t in THEMES]
+NEWS_COLUMNS = ["news_tone", "news_tone_chg", "news_count"] + THEME_COLUMNS
 FEATURE_COLUMNS = TECH_COLUMNS + VALUATION_COLUMNS + NEWS_COLUMNS
 
 # Earnings for month m are reported ~1 quarter later; rates/CAPE price data ~1 month later.
@@ -47,6 +64,8 @@ def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
 
 def technical_features(close: pd.Series) -> pd.DataFrame:
     f = pd.DataFrame(index=close.index)
+    f["ret_1d"] = close.pct_change(1)
+    f["ret_5d"] = close.pct_change(5)
     ma50, ma200 = close.rolling(50).mean(), close.rolling(200).mean()
     hi, lo = close.rolling(252).max(), close.rolling(252).min()
     f["px_vs_ma50"] = close / ma50 - 1
@@ -136,14 +155,36 @@ def news_digest(news: pd.DataFrame, dates: pd.DatetimeIndex, window_days: int = 
     return out
 
 
+def theme_features(news: pd.DataFrame | None, dates: pd.DatetimeIndex, window_days: int = 7,
+                   novelty_days: int = 63) -> pd.DataFrame:
+    out = pd.DataFrame(index=dates, columns=THEME_COLUMNS, dtype=float)
+    if news is None or news.empty:
+        return out
+    flags = pd.DataFrame({t: news["headline"].str.contains(rx, case=False, regex=True)
+                          for t, rx in THEMES.items()})
+    flags["n"] = 1
+    flags["date"] = news["date"].to_numpy()
+    daily = flags.groupby("date").sum()
+    cal = pd.date_range(daily.index.min(), max(daily.index.max(), dates.max()))
+    roll = daily.reindex(cal, fill_value=0).rolling(window_days, min_periods=1).sum()
+    share = roll[list(THEMES)].div(roll["n"].where(roll["n"] > 0), axis=0)
+    share = share.reindex(dates)
+    share[roll["n"].reindex(dates).fillna(0) < 10] = np.nan  # too few headlines that week
+    for t in THEMES:
+        out[f"theme_{t}"] = share[t]
+        base = share[t].shift(1).rolling(novelty_days, min_periods=10).mean()
+        out[f"theme_{t}_nov"] = share[t] - base
+    return out
+
+
 def build_features(prices: pd.DataFrame, shiller: pd.DataFrame | None = None,
                    vix: pd.Series | None = None, news: pd.DataFrame | None = None,
-                   horizons=(5, 21, 63), news_window_days: int = 7) -> pd.DataFrame:
+                   horizons=(1, 7, 20), news_window_days: int = 7) -> pd.DataFrame:
     """Knowledge-base table: one row per trading day with features, news text and labels."""
     close = prices["Close"].astype(float)
     df = pd.concat([technical_features(close), valuation_features(close, shiller, vix)], axis=1)
     nd = news_digest(news, close.index, window_days=news_window_days)
-    df = pd.concat([df, nd], axis=1)
+    df = pd.concat([df, nd, theme_features(news, close.index, news_window_days)], axis=1)
     df["close"] = close
     for h in horizons:
         df[f"fwd_ret_{h}"] = close.shift(-h) / close - 1
@@ -168,3 +209,12 @@ def describe_row(row: pd.Series) -> str:
             f"DD {pct(row['dd_52w'])}, vol {pct(row['vol_1m'])}, RSI {num(row['rsi14'], '{:.0f}')}, "
             f"P/E {num(row['pe_ttm'])}, CAPE {num(row['cape'])}, 10y {num(row['rate_10y'], '{:.2f}')}%, "
             f"VIX {num(row['vix'])}, news tone {num(row['news_tone'], '{:+.2f}')}")
+
+
+def describe_themes(row: pd.Series) -> str:
+    parts = []
+    for t in THEMES:
+        sh, nv = row.get(f"theme_{t}", np.nan), row.get(f"theme_{t}_nov", np.nan)
+        if pd.notna(sh):
+            parts.append(f"{t} {sh * 100:.0f}% of headlines ({'n/a' if pd.isna(nv) else f'{nv * 100:+.0f}pp'} vs prior 3m)")
+    return "; ".join(parts) if parts else "no headline data"

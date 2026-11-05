@@ -135,3 +135,74 @@ prices came from GitHub mirrors of Yahoo's ^GSPC history (1950 to Jun 2023). Run
 and `load_prices` uses yfinance directly. P/E and CAPE come from Shiller's monthly data, with
 earnings lagged 3 months to when they would actually have been published.
 
+## Held-out test: up or down over the next 1, 7 and 20 trading days (`run_holdout.py`)
+
+| split | period | what it is used for |
+|---|---|---|
+| train | labels known before 2015-01-01 | metric scaling and weights, logistic fit, retrieval memory |
+| validation | 2015-01-01 .. 2017-12-31 | tune the RAG (news weight α, k); the LLM forecasts here, sees its errors and writes a playbook |
+| **test** | 2018-01-01 .. 2023-06-29 | never used for any choice. Parameters and playbook are frozen; retrieval memory grows only with outcomes already known on each query date |
+
+News features now include **event themes**: the share of the week's headlines about pandemic, banking/credit,
+war, trade, central bank, recession and energy, plus each theme's *novelty* (change vs the prior 3
+months). With these, the query for 24 Feb 2020 retrieves Apr 2009 (swine flu) and Oct 2014 (Ebola) as
+its closest analogs. Both were followed by gains, so the RAG says P(up 20d) = 77%. The actual move was
+−24%. History offered no precedent for a virus that crashed the market.
+
+### Results without the LLM (daily queries over the whole test period)
+
+AUC is shown with a 95% block-bootstrap confidence interval. An interval that contains 0.5 means no evidence of skill.
+
+| horizon | model | n | always-up | accuracy | AUC [95% CI] | Brier skill vs base rate |
+|---|---|---|---|---|---|---|
+| 1d | RAG metrics | 1381 | 53.7% | 50.8% | 0.511 [0.49, 0.55] | −0.034 |
+| 1d | RAG metrics + news | 1381 | 53.7% | 51.3% | 0.513 [0.48, 0.54] | −0.033 |
+| 1d | logistic, metrics + news | 1381 | 53.7% | 53.7% | 0.515 [0.48, 0.54] | −0.007 |
+| 7d | RAG metrics | 1375 | 61.2% | 50.4% | **0.426 [0.38, 0.48]** | −0.100 |
+| 7d | RAG metrics + news | 1375 | 61.2% | 53.9% | 0.485 [0.43, 0.54] | −0.059 |
+| 7d | logistic, metrics + news | 1375 | 61.2% | 59.9% | 0.499 [0.42, 0.57] | −0.078 |
+| 20d | RAG metrics | 1362 | 65.5% | 58.7% | 0.492 [0.42, 0.56] | −0.073 |
+| 20d | RAG metrics + news | 1362 | 65.5% | 61.4% | 0.530 [0.45, 0.61] | −0.028 |
+| 20d | logistic, metrics + news | 1362 | 65.5% | 64.8% | 0.538 [0.44, 0.65] | −0.052 |
+
+On the 645 test days that have headlines (2018-01..2020-07), RAG metrics + news is the best variant at
+every horizon (AUC 0.527 / 0.524 / 0.515), but every confidence interval still contains 0.5. The one
+interval that excludes 0.5 is *below* it: the 7-day metrics RAG is anti-predictive (AUC 0.43). In the
+2018-2023 test, dips bounced back within a week more often than the 1951-2017 analogs implied.
+
+Full table: `reports/holdout_results.csv`. Predictions: `reports/holdout_*_{1,7,20}d.csv`.
+
+### The LLM learner (`--llm`)
+
+For each query, Claude receives the anonymized metrics and theme profile, 15 retrieved analogs with their
+known 1/7/20-day outcomes, the base rates, and the **playbook** it wrote itself after reviewing its
+validation-period mistakes. It returns P(up) for each horizon as structured JSON. The scoring is
+identical to the models above, on the same dates.
+See `reports/llm_prompt_example.txt` for exactly what the model sees.
+
+```bash
+pip install anthropic && export ANTHROPIC_API_KEY=...
+python run_holdout.py --llm                 # 80 validation + 300 test queries, roughly $5-10 at Opus 5.5 list prices
+python run_holdout.py --llm --no-playbook   # ablation: does the learned playbook help?
+python run_holdout.py --llm --mock-llm      # pipeline check without an API key
+```
+
+Every response is cached in `data/cache/llm_cache.jsonl`, so reruns are free and an interrupted run resumes.
+The learned playbook is saved to `reports/llm_playbook.md`, and `python -m market_rag.cli query --llm` then uses it for today's call.
+Requests use server-side refusal fallback (`fallbacks="default"`).
+
+**Leakage warning.** Claude knows market history up to its training cutoff. The prompts therefore carry no
+dates, no index level and no raw headlines (unless you pass `--headlines`). Still, a profile like
+"pandemic 43% of headlines, VIX 75" is recognizable. For a test the model cannot have memorized, use a
+held-out period after its training cutoff, with live yfinance prices:
+
+```bash
+python run_holdout.py --source yfinance --val-start 2023-01-01 --val-end 2026-07-01 --llm
+```
+
+That forward period has no historical headline data (Yahoo only serves the latest ~20 items), so it
+tests metrics plus analogs. To include news, collect headlines daily from now on (`--news my_news/*.csv`).
+
+*Note:* sections A/B above were produced before the theme features were added and before a fix that
+let the numeric news features (tone, themes) count in the distance. In those runs only the text
+embedding carried news.

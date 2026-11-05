@@ -22,7 +22,7 @@ st.sidebar.header("Knowledge base")
 ticker = st.sidebar.text_input("Index / ticker", value="^GSPC").upper()
 use_builtin_news = st.sidebar.checkbox("Built-in historical headlines (2008-2016, 2017-2020)", value=True)
 st.sidebar.header("Retrieval")
-horizon = st.sidebar.selectbox("Horizon (trading days)", [5, 21, 63, 252], index=1)
+horizon = st.sidebar.selectbox("Horizon (trading days)", [1, 7, 20, 63, 252], index=2)
 use_news = st.sidebar.checkbox("Use news similarity", value=True)
 tune = st.sidebar.checkbox("Learn alpha/k on validation slice", value=True)
 k = st.sidebar.slider("k analogs (if not tuned)", 5, 60, 20)
@@ -38,7 +38,7 @@ def get_kb(ticker, builtin):
     px = data.load_prices(ticker)
     sh = data.load_shiller() if ticker in ("^GSPC", "SPY", "VOO", "^SPX") else None
     news = data.load_news(builtin=builtin)
-    return build_features(px, sh, data.load_vix(), news, horizons=(5, 21, 63, 252))
+    return build_features(px, sh, data.load_vix(), news, horizons=(1, 7, 20, 63, 252))
 
 
 kb = get_kb(ticker, use_builtin_news)

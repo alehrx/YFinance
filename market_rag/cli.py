@@ -23,7 +23,7 @@ def build_kb(args) -> pd.DataFrame:
     px = data.load_prices(args.ticker, source=args.source, csv_path=args.prices_csv)
     shiller = data.load_shiller() if args.ticker.upper() in ("^GSPC", "SPY", "^SPX", "VOO") else None
     news = data.load_news(args.news, builtin=not args.no_builtin_news)
-    return build_features(px, shiller, data.load_vix(), news, horizons=(5, 21, 63, 252))
+    return build_features(px, shiller, data.load_vix(), news, horizons=(1, 7, 20, 63, 252))
 
 
 def cmd_query(args):
@@ -66,12 +66,21 @@ def cmd_query(args):
     cols = [c for c in cols if c in nb]
     print("\nTop analogs:\n" + nb[cols].head(10).round(3).to_string())
     if args.llm:
-        from .llm import build_prompt, llm_call
+        from pathlib import Path
 
-        prompt = build_prompt(row, text, pred, args.horizon, model.base_rate)
-        out = llm_call(prompt)
-        print(f"\nClaude: P(up)={out['p_up']:.0%}, E[r]={out['expected_return_pct']:+.2f}%, {out['stance']}")
-        print("Drivers:", "; ".join(out["key_drivers"]))
+        from .llm import HORIZONS, ClaudePredictor, build_prompt
+
+        if args.horizon < max(HORIZONS):
+            print("(LLM analogs need 20-day outcomes; rerun with --horizon 20 for the LLM step)")
+            return
+        an = kb.loc[nb.index]
+        base = {h: float((kb[f"fwd_ret_{h}"].dropna() > 0).mean()) for h in HORIZONS}
+        pb_path = Path(__file__).resolve().parent.parent / "reports" / "llm_playbook.md"
+        playbook = pb_path.read_text() if pb_path.exists() else ""
+        out = ClaudePredictor(cache_path=data.CACHE_DIR / "llm_cache.jsonl").ask(
+            build_prompt(row, an, base, playbook))
+        print("\nClaude (" + ("with" if playbook else "without") + " learned playbook): " +
+              ", ".join(f"P(up {h}d)={out[f'p_up_{h}d']:.0%}" for h in HORIZONS))
         print(out["rationale"])
 
 
@@ -98,7 +107,7 @@ def main():
     ap.add_argument("--news", nargs="*", help="extra headline CSVs (date,headline); globs ok")
     ap.add_argument("--no-builtin-news", action="store_true")
     ap.add_argument("--news-ticker", default="SPY", help="ticker whose Yahoo headlines/PE are used live")
-    ap.add_argument("--horizon", type=int, default=21)
+    ap.add_argument("--horizon", type=int, default=20)
     ap.add_argument("--k", type=int, default=20)
     ap.add_argument("--alpha", type=float, default=0.25)
     ap.add_argument("--no-tune", action="store_true")

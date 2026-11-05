@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from .features import FEATURE_COLUMNS
+from .features import FEATURE_COLUMNS, NEWS_COLUMNS
 
 
 @dataclass
@@ -61,7 +61,12 @@ class MarketRAG:
         self.text_model = None
 
     # ------------------------------------------------------------------ fitting
-    def fit(self, kb: pd.DataFrame, train_end: pd.Timestamp | None = None) -> "MarketRAG":
+    def fit(self, kb: pd.DataFrame, train_end: pd.Timestamp | None = None,
+            val_start: pd.Timestamp | None = None) -> "MarketRAG":
+        """Learn from rows whose label is known before ``train_end``. If ``val_start`` is
+        given, (alpha, k) are tuned on queries in [val_start, train_end) instead of the
+        last ``val_frac`` of the window."""
+        self.val_start = pd.Timestamp(val_start) if val_start is not None else None
         cfg = self.cfg
         h = cfg.horizon
         self.kb = kb
@@ -80,11 +85,17 @@ class MarketRAG:
         tr = kb.loc[train]
 
         # 1) metrics: robust scale + learned relevance weights
-        feats = [c for c in cfg.features if c in kb and tr[c].notna().mean() >= cfg.min_coverage]
+        # News features only exist for news-era days, so they are exempt from the coverage
+        # rule and just need enough training rows.
+        feats = [c for c in cfg.features if c in kb and (
+            tr[c].notna().mean() >= cfg.min_coverage if c not in NEWS_COLUMNS else tr[c].notna().sum() >= 200)]
         self.features = feats
+        self.is_news = np.array([c in NEWS_COLUMNS for c in feats])
         med = tr[feats].median()
-        iqr = (tr[feats].quantile(0.75) - tr[feats].quantile(0.25)).replace(0, 1.0)
-        self.center, self.scale = med, iqr
+        iqr = tr[feats].quantile(0.75) - tr[feats].quantile(0.25)
+        sd = tr[feats].std()
+        scale = iqr.where(iqr > 1e-9, sd).where(lambda x: x > 1e-9, 1.0)
+        self.center, self.scale = med, scale
         if cfg.weighting == "ic":
             w = []
             for c in feats:
@@ -136,8 +147,11 @@ class MarketRAG:
         largest k serves every smaller k."""
         cfg = self.cfg
         idx = np.flatnonzero(self.train_mask)
-        start = idx[int(len(idx) * (1 - cfg.val_frac))]
-        qs = idx[(idx >= start)][:: max(cfg.horizon // 2, 5)]
+        if self.val_start is not None:
+            start = int(np.searchsorted(self.kb.index.values, np.datetime64(self.val_start)))
+        else:
+            start = idx[int(len(idx) * (1 - cfg.val_frac))]
+        qs = idx[(idx >= start)][:: max(cfg.horizon // 2, 1)]
         alphas = cfg.alpha_grid if self.Et is not None else (0.0,)
         kmax = max(cfg.k_grid)
         best, best_score = (self.alpha, self.k), -np.inf
@@ -181,11 +195,7 @@ class MarketRAG:
         ci = np.flatnonzero(cand)
         if len(ci) < k:
             return None
-        diff = self.Xn[ci] - xn
-        valid = ~np.isnan(diff)
-        nvalid = valid.sum(1)
-        d = np.sqrt(np.where(valid, diff, 0) ** 2 @ np.ones(diff.shape[1]) / np.maximum(nvalid, 1))
-        d[nvalid < 0.5 * diff.shape[1]] = np.inf
+        d = self._distance(self.Xn[ci], xn)
         s_num = -d
         fin = np.isfinite(s_num)
         z = np.full(len(ci), -np.inf)
@@ -214,6 +224,27 @@ class MarketRAG:
         w = np.exp((sc - sc.max()) / self.cfg.temperature)
         w /= w.sum()
         return ci[chosen], w, sc, -s_num[chosen], sims_txt[chosen]
+
+    def _distance(self, X: np.ndarray, xn: np.ndarray) -> np.ndarray:
+        """NaN-aware weighted distance. Metric dims: mean squared diff over shared dims
+        (candidate needs at least half of them). News dims: only if the query has news; a
+        candidate without news gets the median news distance (neither near nor far)."""
+        m, nw = ~self.is_news, self.is_news & ~np.isnan(xn)
+        dm = X[:, m] - xn[m]
+        vm = ~np.isnan(dm)
+        nm = vm.sum(1)
+        d2 = np.where(vm, dm, 0) ** 2 @ np.ones(dm.shape[1]) / np.maximum(nm, 1)
+        d2[nm < 0.5 * m.sum()] = np.inf
+        if nw.any():
+            dn = X[:, nw] - xn[nw]
+            vn = ~np.isnan(dn)
+            nn = vn.sum(1)
+            d2n = np.where(vn, dn, 0) ** 2 @ np.ones(dn.shape[1]) / np.maximum(nn, 1)
+            has = nn >= 0.5 * nw.sum()
+            if has.any():
+                d2n[~has] = np.median(d2n[has])
+                d2 = (d2 * m.sum() + d2n * nw.sum()) / (m.sum() + nw.sum())
+        return np.sqrt(d2)
 
     def _predict_encoded(self, xn, et, as_of_ns, alpha, k, self_pos=None):
         r = self._retrieve(xn, et, as_of_ns, alpha, k, self_pos)
