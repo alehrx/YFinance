@@ -147,7 +147,7 @@ News features now include **event themes**: the share of the week's headlines ab
 war, trade, central bank, recession and energy, plus each theme's *novelty* (change vs the prior 3
 months). With these, the query for 24 Feb 2020 retrieves Apr 2009 (swine flu) and Oct 2014 (Ebola) as
 its closest analogs. Both were followed by gains, so the RAG says P(up 20d) = 77%. The actual move was
-−24%. History offered no precedent for a virus that crashed the market.
+−31%. History offered no precedent for a virus that crashed the market.
 
 ### Results without the LLM (daily queries over the whole test period)
 
