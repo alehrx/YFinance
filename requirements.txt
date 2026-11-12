@@ -1,10 +1,8 @@
-yfinance
 numpy
 pandas
-plotly
-scikit-learn
 scipy
-streamlit
+scikit-learn
 matplotlib
-# optional: LLM generation step (python -m market_rag.cli query --llm)
-# anthropic
+# optional, for knee_analogs.inspect_datasets on .mat/.h5/.xlsx files
+h5py
+openpyxl

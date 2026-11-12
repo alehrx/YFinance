@@ -1,6 +1,0 @@
-New terminal (In VS Code upper left corner)
-
-In powershell, navigate to +> and click Command Prompt
-
-Copy and paste: streamlit run app.py
-Copy and paste: streamlit run app_diag.py --> version for verifying the future trend prediciton 

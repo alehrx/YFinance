@@ -1,5 +1,5 @@
-app_diag.py
-data/cache/
+data/
 __pycache__/
 *.pyc
 .pytest_cache/
+app_diag.py
