@@ -46,7 +46,8 @@ THEMES = {
     "recession": r"recession|slowdown|unemployment|jobless|layoff|downturn|contraction|\bgdp\b",
     "energy": r"\boil\b|crude|opec|gas price",
 }
-THEME_COLUMNS = [f"theme_{t}" for t in THEMES] + [f"theme_{t}_nov" for t in THEMES]
+THEME_COLUMNS = ([f"theme_{t}" for t in THEMES] + [f"theme_{t}_nov" for t in THEMES]
+                 + [f"theme_{t}_slope" for t in THEMES])  # slope: change over the last 2 weeks (trajectory)
 NEWS_COLUMNS = ["news_tone", "news_tone_chg", "news_count"] + THEME_COLUMNS
 FEATURE_COLUMNS = TECH_COLUMNS + VALUATION_COLUMNS + NEWS_COLUMNS
 
@@ -174,6 +175,7 @@ def theme_features(news: pd.DataFrame | None, dates: pd.DatetimeIndex, window_da
         out[f"theme_{t}"] = share[t]
         base = share[t].shift(1).rolling(novelty_days, min_periods=10).mean()
         out[f"theme_{t}_nov"] = share[t] - base
+        out[f"theme_{t}_slope"] = share[t] - share[t].shift(10)
     return out
 
 

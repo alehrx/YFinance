@@ -206,3 +206,76 @@ tests metrics plus analogs. To include news, collect headlines daily from now on
 *Note:* sections A/B above were produced before the theme features were added and before a fix that
 let the numeric news features (tone, themes) count in the distance. In those runs only the text
 embedding carried news.
+
+## Prototype B: match news *events* to historical events (`run_event_analogs.py`)
+
+The idea is to retrieve similar historical **events**, not similar days.
+
+- **Event catalog:** `market_rag/events_catalog.csv` lists 93 market-moving events from 1950 to 2023, from the
+  Korean War and the Cuban missile crisis to Lehman, COVID and SVB. Each has a hand-written card: type,
+  economic channel (supply / demand / financial system / rates / confidence), scope, trajectory
+  (emerging / escalating / climax / resolving), perceived severity, policy support, tone and surprise.
+- **Hindsight:** the cards were written in 2026, so the choice of events and their severity scores
+  are coloured by what happened next.
+- **Matching:** each event is matched to earlier events by card, by the market's reaction that day
+  (1-day and 5-day move, drawdown, trend, volatility), or both.
+- **Theme trajectory:** the news themes now also carry a trajectory feature, the change in each
+  theme's headline share over the last two weeks.
+
+**Test 1: 76 events, 1980-2023, each predicted only from events whose outcome was already known.**
+Brier scores, where lower is better and 0.25 is a coin flip:
+
+| method | up 1d | up 7d | up 20d | drop >5% in 20d | drop >10% | rank corr. with next-month vol |
+|---|---|---|---|---|---|---|
+| base rate (all earlier days) | 0.241 | 0.237 | **0.213** | 0.200 | 0.126 | 0.00 |
+| any earlier event, no matching | **0.227** | 0.245 | 0.222 | 0.201 | **0.119** | −0.05 |
+| similar market days | 0.264 | 0.239 | 0.235 | **0.194** | 0.125 | **0.67** |
+| events with similar market reaction | 0.257 | 0.272 | 0.252 | 0.215 | 0.129 | 0.59 |
+| events with similar card | 0.245 | 0.243 | 0.226 | 0.210 | 0.128 | 0.06 |
+| events, card + reaction | 0.240 | 0.254 | 0.244 | 0.216 | 0.133 | 0.34 |
+
+No method beats the base rate in a way the bootstrap confidence intervals support
+(`reports/events_scores.csv`).
+
+- **The matching itself works.** COVID (24 Feb 2020) pulls up Ebola, the 1957 and 1968 flus, H1N1 and
+  SARS. Lehman pulls up LTCM, Continental Illinois, Bear Stearns and the BNP freeze. Ukraine pulls up
+  Kuwait, Suez, Yom Kippur and the oil embargo.
+- **Outcomes vary within each kind of event.** Lehman's eight matches had 20-day returns between
+  −4% and +5%; Lehman itself fell 16%. COVID's ranged from −5% to +9%; COVID fell 31%.
+  See `reports/figs/events_reference_classes.png`.
+- **Volatility is predictable, from the market's reaction, not from the card.** Rank correlation with
+  next-month volatility is 0.67 for similar market days and 0.59 for similar market reactions, against
+  0.06 for card matching alone.
+
+In-sample (`reports/figs/events_by_card.png`), events labelled *escalating* were followed by a
+>5% drawdown 45% of the time, against 15% for all days. Severity 4-5 events were followed by one
+57-80% of the time. Those severity scores were assigned with hindsight, and the pattern did not
+survive the leave-future-out test.
+
+**Test 2: held-out news days, 2018-01 to 2020-06 (train < 2015, tuning 2015-2017).** Can news
+themes and their trajectory improve drawdown and volatility forecasts?
+
+| features | AUC for a >5% drawdown within 20d [95% CI] | rank corr. with next-20d vol |
+|---|---|---|
+| market metrics | 0.51 [0.36, 0.69] | **0.52** |
+| + news themes | 0.42 [0.29, 0.56] | 0.41 |
+| + themes + trajectory | 0.42 [0.28, 0.56] | 0.42 |
+| recent volatility only | 0.48 [0.30, 0.69] | 0.44 |
+
+Adding news made both forecasts worse. Theme levels differ between the training headlines (Reddit
+world news) and the test headlines (Reuters / CNBC / Guardian), and 628 overlapping days amount to
+only about 30 independent months.
+
+### Takeaways
+
+1. "Find similar historical moments" works as **retrieval**: the matched events are sensible and
+   make good context for a human or an LLM.
+2. As a **forecast**, it does not beat the base rate on this data, for direction or for drawdowns.
+   History mostly says "shocks recover", and the costly exceptions (1987, Lehman, COVID) are, almost
+   by definition, the ones without close precedent.
+3. The market's own reaction (size of the drop, volatility) is what predicts the *size* of the
+   moves that follow. The news content adds little on top of that.
+4. To test the news side properly would need consistent news coverage across many decades (for
+   example NYT or WSJ archives) and event cards written blind to outcomes: an LLM reading only that
+   day's headlines, validated after its training cutoff.
+

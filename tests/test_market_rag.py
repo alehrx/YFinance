@@ -44,3 +44,26 @@ def test_news_signal_recovered():
             p = m.predict_index(i)
             hits.append((p.exp_ret > 0) == ("boom" in txt))
     assert len(hits) > 10 and np.mean(hits) > 0.8
+
+
+def test_event_analogs_no_lookahead(tmp_path):
+    from market_rag.events import add_risk_labels, leave_future_out, load_events
+
+    rng = np.random.default_rng(1)
+    dates = pd.bdate_range("1990-01-01", periods=4000)
+    close = pd.Series(100 * np.exp(np.cumsum(rng.normal(0.0003, 0.01, len(dates)))), index=dates)
+    kb = add_risk_labels(build_features(pd.DataFrame({"Close": close}), horizons=(1, 7, 20)))
+    ev_dates = kb.index[300:3900:90]
+    rows = ["date,name,types,channels,scope,trajectory,severity,policy,tone,surprise,approx"]
+    rows += [f"{d.date()},e{i},{'war' if i % 2 else 'financial'},confidence,3,1,2,0,-1,1,0"
+             for i, d in enumerate(ev_dates)]
+    rows += ["1980-01-01,before data,war,confidence,3,1,2,0,-1,1,0"]  # must be dropped
+    path = tmp_path / "cat.csv"
+    path.write_text("\n".join(rows))
+    ev = load_events(kb, path)
+    assert ev["mdate"].min() >= kb.index[0] and "before data" not in set(ev["name"])
+    preds, analogs = leave_future_out(kb, ev, k=4, start=str(kb.index[0].date()))
+    assert len(preds) > 10
+    for (d, _), a in analogs.items():
+        lab = kb.loc[a["mdate"], "label_date_20"]
+        assert (pd.to_datetime(lab) < d).all()

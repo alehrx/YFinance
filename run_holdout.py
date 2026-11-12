@@ -37,7 +37,7 @@ def load_kb(source: str, rebuild: bool) -> pd.DataFrame:
     cache = data.CACHE_DIR / "kb.pkl"
     if cache.exists() and not rebuild:
         kb = pd.read_pickle(cache)
-        if all(f"fwd_ret_{h}" in kb for h in HORIZONS) and "theme_pandemic" in kb:
+        if all(f"fwd_ret_{h}" in kb for h in HORIZONS) and "theme_pandemic_slope" in kb:
             return kb
     px = data.load_prices("^GSPC", source=source)
     kb = build_features(px, data.load_shiller(), data.load_vix(), data.load_news(),
