@@ -1,0 +1,15 @@
+[{"id": "Q001", "knee": 95, "lo": 60, "hi": 140, "why": "Severe, accelerating fade (-102 mAh by cycle 100, -1.38 mAh/cycle late), with a low 2C step and then 6C over most of the SOC range, points to heavy lithium plating; the knee is near or just after cycle 100, earlier than its fastest-fading analogs (147 and 157)."},
+{"id": "Q002", "knee": 365, "lo": 320, "hi": 405, "why": "The capacity curve is flat and still slightly positive, with a moderate 4.75C high-SOC current, matching analogs that knee at 336 to 385."},
+{"id": "Q003", "knee": 345, "lo": 300, "hi": 390, "why": "Fade is slightly faster than the flat analogs (-3.5 mAh, -0.092 mAh/cycle late), closest to the 4.8C single-step analog that knees at 352."},
+{"id": "Q004", "knee": 345, "lo": 295, "hi": 395, "why": "A 5.5C high-SOC step and moderate fade (-7.2 mAh, -0.143 mAh/cycle) place it between analogs that knee at 325 (-9.9 mAh) and 399 (-6.0 mAh)."},
+{"id": "Q005", "knee": 360, "lo": 320, "hi": 400, "why": "A low 4.25C high-SOC current and a still-positive capacity change match the flat analogs that knee at 336 to 400."},
+{"id": "Q006", "knee": 362, "lo": 320, "hi": 400, "why": "The flat early curve and mild late slope (-0.055 mAh/cycle) closely match analogs that knee at 350 to 374."},
+{"id": "Q007", "knee": 365, "lo": 320, "hi": 405, "why": "The fade profile almost exactly matches analogs that knee at 361 to 374, and the 5C high-SOC step is moderate."},
+{"id": "Q008", "knee": 345, "lo": 300, "hi": 390, "why": "A 5C step over most of the SOC range and a late slope of -0.106 mAh/cycle give slightly faster fade than the flat analogs (360s), but not as fast as the analog that knees at 325."},
+{"id": "Q009", "knee": 360, "lo": 315, "hi": 400, "why": "Single-step 4.8C charging with a cool cell (30.1 C) and a flat curve resembles the 352-cycle constant-current analog and the flat cells in the 360s."},
+{"id": "Q010", "knee": 320, "lo": 230, "hi": 390, "why": "Noticeable early fade (-13.6 mAh, -0.213 mAh/cycle) and the highest average temperature (33.4 C) put it among analogs with widely spread knees (157 to 405), so I weighted it toward the analogs at 325 to 367."},
+{"id": "Q011", "knee": 345, "lo": 300, "hi": 390, "why": "Single-step 4.8C charging with fade slightly faster (-3.2 mAh) than the similar analog that knees at 352."},
+{"id": "Q012", "knee": 368, "lo": 325, "hi": 405, "why": "The step down to 4.25C above 50% SOC and the very flat fade match the low-high-SOC-current analogs that knee at 336 to 400."},
+{"id": "Q013", "knee": 340, "lo": 295, "hi": 385, "why": "A 5C step over most of the SOC range, rising resistance relative to its analogs, and a late slope of -0.128 mAh/cycle put it between the analog that knees at 325 and the flat cells in the 360s."},
+{"id": "Q014", "knee": 362, "lo": 320, "hi": 400, "why": "A low 4C high-SOC current and a still-positive capacity change match the analogs that knee at 336 to 400."}]
+RECOGNIZED: yes - this appears to be the Severson et al. 2019 (Nature Energy) A123 LFP/graphite 1.1 Ah fast-charging dataset (Stanford/MIT/Toyota Research Institute).

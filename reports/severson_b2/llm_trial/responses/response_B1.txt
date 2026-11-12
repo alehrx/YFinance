@@ -1,0 +1,15 @@
+[{"id": "Q101", "knee": 365, "lo": 335, "hi": 400, "why": "Early fade is mild with slight late-window acceleration, so it sits at the analog mean of about 370 or a little below."},
+{"id": "Q102", "knee": 365, "lo": 335, "hi": 398, "why": "Its fade profile is nearly flat and matches analogs with knees at 356-370; plating risk from 4.85C at high SOC is moderate."},
+{"id": "Q103", "knee": 372, "lo": 342, "hi": 405, "why": "A low 3.5C current at high SOC and net capacity gain at cycle 100 point to slow plating-driven loss, similar to the long-lived 5.2C/4.0C analogs."},
+{"id": "Q104", "knee": 360, "lo": 328, "hi": 395, "why": "Its fade looks benign, like the 5.6C/4.25C analogs, but its higher internal resistance (20.1 mOhm) suggests a somewhat earlier knee."},
+{"id": "Q105", "knee": 372, "lo": 340, "hi": 402, "why": "Its early fade is small and steady, matching the 4.65C/5.0C analog (392) and the 4.4C/4.85C analog (361)."},
+{"id": "Q106", "knee": 368, "lo": 338, "hi": 402, "why": "A low current at high SOC and capacity still above its start value at cycle 100 resemble analogs with knees at 351-400."},
+{"id": "Q107", "knee": 320, "lo": 200, "hi": 395, "why": "Strong early fade and curvature (-0.225 mAh/cycle) with 5.5C at high SOC suggest heavy plating, and its analogs range from 147 to 405."},
+{"id": "Q108", "knee": 362, "lo": 325, "hi": 398, "why": "Its moderate early fade with 5.5C at high SOC is similar to the 4.0C/6.0C (367) and 4.4C/5.5C (376) analogs."},
+{"id": "Q109", "knee": 375, "lo": 343, "hi": 405, "why": "Its fade is flat and noisy with a long, high first step, which resembles the long-lived 4.9C/69% and 5.2C/50% analogs."},
+{"id": "Q110", "knee": 365, "lo": 330, "hi": 400, "why": "6C over 69-80% SOC drives plating, but its early fade is moderate and comparable to the analogs at 367-376."},
+{"id": "Q111", "knee": 360, "lo": 328, "hi": 392, "why": "Its single-step 4.8C fade sits between the two same-protocol analogs (347 and 382)."},
+{"id": "Q112", "knee": 366, "lo": 335, "hi": 398, "why": "It is nearly a constant 4.75C charge with mild early fade, closely matching the analogs at 356-370."},
+{"id": "Q113", "knee": 375, "lo": 345, "hi": 405, "why": "Its fade is benign and slightly positive with a moderate 4.5C at high SOC, like analogs mostly between 370 and 400."},
+{"id": "Q114", "knee": 372, "lo": 342, "hi": 405, "why": "A low 3.5C current at high SOC and net capacity gain at cycle 100 match the 5.2C/4.0C and 5.2C/4.25C analogs (400 and 401)."}]
+RECOGNIZED: yes - the cell type and charging protocols match the A123 LFP/graphite fast-charging dataset of Severson et al. 2019 (Nature Energy) and Attia et al. 2020; I made these predictions from the given data, not from recalled results.

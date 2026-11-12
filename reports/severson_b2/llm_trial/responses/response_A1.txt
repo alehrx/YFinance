@@ -1,0 +1,15 @@
+[{"id":"Q101","knee":364,"lo":335,"hi":395,"why":"Its analogs cluster around 350-400, and its slightly steeper late decline points to the middle-lower part of that range."},
+{"id":"Q102","knee":362,"lo":330,"hi":395,"why":"Its trajectory closely matches analogs with knees at 356-392, and the analog mean is about 368."},
+{"id":"Q103","knee":368,"lo":340,"hi":400,"why":"It has a flat, high-plateau trajectory like analogs with knees at 351-401."},
+{"id":"Q104","knee":363,"lo":335,"hi":395,"why":"It shows a strong early rise and a mild late decline, like analogs at 347-401 (mean about 367)."},
+{"id":"Q105","knee":372,"lo":340,"hi":400,"why":"Its gentle decline is similar to analogs at 361-401, but its lower p1 adds slight downside risk."},
+{"id":"Q106","knee":366,"lo":340,"hi":398,"why":"Its high-plateau trajectory matches analogs at 351-400, and the analog mean is about 365."},
+{"id":"Q107","knee":300,"lo":180,"hi":400,"why":"Its steep early decline and low p1 put it between the 147 analog (p1 1.0) and the 405 analog with a similar slope, so uncertainty is wide."},
+{"id":"Q108","knee":368,"lo":330,"hi":400,"why":"Its moderate early decline matches the analogs at 367 and 376, and the analog mean is about 369."},
+{"id":"Q109","knee":378,"lo":345,"hi":402,"why":"Its flat late slope and mid-range parameters resemble analogs at 370-401."},
+{"id":"Q110","knee":372,"lo":340,"hi":400,"why":"Its moderate, steady decline is like the analogs at 367 and 376, and its high p2 nudges the estimate up slightly."},
+{"id":"Q111","knee":356,"lo":325,"hi":388,"why":"Its closest analog with the same parameters and a similar trajectory knees at 347, while another with identical parameters knees at 382."},
+{"id":"Q112","knee":365,"lo":335,"hi":395,"why":"Its trajectory matches analogs at 356-392, and the analog mean is about 369."},
+{"id":"Q113","knee":376,"lo":345,"hi":402,"why":"Its mild decline and high-p1 analogs give knees of 351-401 (mean about 379)."},
+{"id":"Q114","knee":372,"lo":345,"hi":402,"why":"Its high-plateau trajectory with a minimal late slope matches analogs at 351-401."}]
+RECOGNIZED: no

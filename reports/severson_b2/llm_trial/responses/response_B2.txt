@@ -1,0 +1,15 @@
+[{"id": "Q201", "knee": 350, "lo": 315, "hi": 385, "why": "Charging at 5C up to 80% SOC with a late fade (-0.079 mAh/cycle) between analogs that kneed at 327 and 356-392 points to moderate plating risk."},
+{"id": "Q202", "knee": 368, "lo": 335, "hi": 400, "why": "A lower 4C current in the high-SOC window and net capacity gain at cycle 100 closely match analogs with knees at 336-401."},
+{"id": "Q203", "knee": 372, "lo": 340, "hi": 402, "why": "Low high-SOC current, flat early fade and mild curvature match analogs at 336-401."},
+{"id": "Q204", "knee": 360, "lo": 325, "hi": 395, "why": "Only 3C at high SOC, but a faster late fade (-0.062) and stronger curvature than its analogs pull it toward the middle of their range."},
+{"id": "Q205", "knee": 372, "lo": 340, "hi": 402, "why": "One of the healthiest early curves (+3.7 mAh at cycle 100, late fade -0.015) and a 4.25C high-SOC step match analogs at 336-401."},
+{"id": "Q206", "knee": 362, "lo": 330, "hi": 395, "why": "A gentle 3C high-SOC step, but a larger temperature rise and stronger curvature put it near analogs at 336-366."},
+{"id": "Q207", "knee": 365, "lo": 333, "hi": 397, "why": "Moderate 4.5C high-SOC current and mild late fade sit squarely among analogs at 350-401."},
+{"id": "Q208", "knee": 330, "lo": 295, "hi": 370, "why": "A 6C step at high SOC is likely causing early plating, and its fade (-0.12 / -0.18) is close to the analogs that kneed at 325-329."},
+{"id": "Q209", "knee": 305, "lo": 260, "hi": 350, "why": "Fast, nearly linear fade (-0.18 / -0.21), a low starting capacity and a 6C high-SOC step are worse than the 325-329 analogs, though the low curvature delays acceleration somewhat."},
+{"id": "Q210", "knee": 115, "lo": 85, "hi": 155, "why": "6C over nearly the whole window gives severe, accelerating fade (-0.53 late, curvature -3.0), between the analogs that kneed at 79 and 157."},
+{"id": "Q211", "knee": 220, "lo": 165, "hi": 290, "why": "A 6C high-SOC step with fade of -0.21 / -0.31 is slightly better than the 157-cycle analog and worse than the 325-329 analogs."},
+{"id": "Q212", "knee": 360, "lo": 328, "hi": 392, "why": "A 4.85C high-SOC step and small late fade (-0.065) match analogs at 327-392, mostly near 360-375."},
+{"id": "Q213", "knee": 365, "lo": 333, "hi": 397, "why": "A 4.25C high-SOC step and capacity still above its starting value at cycle 100 match analogs at 336-401."},
+{"id": "Q214", "knee": 350, "lo": 312, "hi": 388, "why": "A large early capacity rise hides a fast-accelerating late fade (-0.074, curvature -1.94) at 5C high-SOC current, so it sits slightly below its analogs."}]
+RECOGNIZED: yes - the setup looks like the Stanford/MIT/Toyota Research Institute LFP/graphite (A123 APR18650M1A) fast-charging dataset (Severson et al. 2019 / Attia et al. 2020), but I did not recall any specific cell's result.

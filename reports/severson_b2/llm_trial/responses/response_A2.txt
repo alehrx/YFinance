@@ -1,0 +1,15 @@
+[{"id": "Q201", "knee": 350, "lo": 318, "hi": 385, "why": "Its trajectory shape matches analogs with knees from 356 to 392, but its late decline is steeper (-0.079), so the estimate leans toward the 327 analog."},
+{"id": "Q202", "knee": 365, "lo": 335, "hi": 395, "why": "It has a gentle late slope and an early rise like analogs 1, 5 and 7 (336-390), so the estimate sits near their mean."},
+{"id": "Q203", "knee": 370, "lo": 340, "hi": 400, "why": "Its trajectory is almost the same as analogs at 363-401 and its late decline is mild."},
+{"id": "Q204", "knee": 355, "lo": 320, "hi": 390, "why": "Its late decline (-0.062) is steeper than most analogs and its shape resembles the 356-knee device, so the estimate is a bit below the analog mean."},
+{"id": "Q205", "knee": 375, "lo": 345, "hi": 405, "why": "It has a strong early rise and a very mild late slope, close to analogs at 366-401."},
+{"id": "Q206", "knee": 355, "lo": 325, "hi": 390, "why": "It has a moderate late slope (-0.034) with higher curvature and a large dt, so the estimate is slightly below analogs 357-366."},
+{"id": "Q207", "knee": 365, "lo": 335, "hi": 395, "why": "Its shape and late slope are between analogs at 350-363 and 384-401."},
+{"id": "Q208", "knee": 315, "lo": 280, "hi": 355, "why": "Its trajectory closely tracks analog 1 (325) but declines slightly faster."},
+{"id": "Q209", "knee": 320, "lo": 270, "hi": 370, "why": "It declines steadily from the very start, faster than analog 7 (329), but with low curvature, which suggests a near-linear fade."},
+{"id": "Q210", "knee": 130, "lo": 95, "hi": 175, "why": "It declines very fast (s_all -0.343), between analog 2 (157) and analog 1 (79)."},
+{"id": "Q211", "knee": 220, "lo": 160, "hi": 300, "why": "Its decline rate (-0.212) is between analog 3 (157 at -0.225) and analog 5 (329 at -0.146)."},
+{"id": "Q212", "knee": 360, "lo": 330, "hi": 390, "why": "Its shape is like analogs at 371-392, but its late slope is slightly steeper, so the estimate is a little lower."},
+{"id": "Q213", "knee": 365, "lo": 335, "hi": 395, "why": "It has a moderate late slope (-0.041) and matches analogs at 350-401, so the estimate is near their median."},
+{"id": "Q214", "knee": 345, "lo": 305, "hi": 385, "why": "It has an unusually large early rise, then a steep late decline and high curvature, so the estimate is below the analog median."}]
+RECOGNIZED: yes (tentative) - the two-step fast-charge parameters (C1, Q1 switch %, C2) look like the Severson et al. 2019 / Attia et al. 2020 LFP/graphite (A123) fast-charging dataset, but I can't identify the specific cells.

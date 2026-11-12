@@ -1,0 +1,15 @@
+[{"id": "Q001", "knee": 110, "lo": 85, "hi": 145, "why": "Its decline is already about 3-5x steeper than the fastest analogs (knees 147 and 157) and is still accelerating, so the knee is probably close or just past."},
+{"id": "Q002", "knee": 365, "lo": 330, "hi": 400, "why": "The curve is flat and almost matches analogs whose knees cluster between 336 and 385."},
+{"id": "Q003", "knee": 345, "lo": 305, "hi": 385, "why": "It declines slightly faster than the flat analogs, and the closest one with the same settings has its knee at 352."},
+{"id": "Q004", "knee": 355, "lo": 310, "hi": 395, "why": "Its moderate late decline falls between the 325 and 399 analogs with similar trajectories."},
+{"id": "Q005", "knee": 360, "lo": 330, "hi": 395, "why": "Its trajectory is nearly flat and almost identical to analogs with knees from 336 to 400."},
+{"id": "Q006", "knee": 360, "lo": 325, "hi": 395, "why": "It is a typical flat curve, and its analogs average a knee of about 365."},
+{"id": "Q007", "knee": 362, "lo": 330, "hi": 395, "why": "It closely matches a group of flat analogs whose knees fall between 350 and 400."},
+{"id": "Q008", "knee": 340, "lo": 300, "hi": 380, "why": "Its late decline is slightly faster than the flat analogs, which moves the knee a little earlier than their average of about 360."},
+{"id": "Q009", "knee": 358, "lo": 325, "hi": 395, "why": "It is flat, sits between the 352 analog with the same settings and the flat analogs near 370."},
+{"id": "Q010", "knee": 315, "lo": 230, "hi": 385, "why": "Its fairly fast decline sits between the fast analog at 157 and the moderate ones at 325-405, so the uncertainty is wide."},
+{"id": "Q011", "knee": 340, "lo": 300, "hi": 380, "why": "It has the same settings as the 352 analog and a slightly steeper late decline, so the knee should come a little earlier."},
+{"id": "Q012", "knee": 365, "lo": 335, "hi": 400, "why": "The curve is flat with a small late dip, and its analogs average a knee of about 368."},
+{"id": "Q013", "knee": 335, "lo": 295, "hi": 375, "why": "Its moderate late decline is close to the 325 and 367 analogs that have declining curves."},
+{"id": "Q014", "knee": 360, "lo": 330, "hi": 395, "why": "It is a flat curve similar to analogs with knees from 336 to 400."}]
+RECOGNIZED: yes - It looks like the MIT/Stanford/Toyota fast-charging lithium-iron-phosphate cell dataset (Severson et al. 2019), based on the two-step charging settings, the roughly 1.07 Ah starting capacity and the resistance and temperature readings.

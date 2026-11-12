@@ -84,3 +84,61 @@ resistance and temperature drift, protocol) to snapshots of other cells at any c
 Run it on another dataset with `python run_study.py --data <folder>`. The folder needs one CSV
 per cell with `cycle` and `QD`, plus optionally `IR`, `Tavg`, `chargetime` and `charge_policy`.
 Other formats need a small adapter in `knee_analogs/core.py::load_cells`.
+
+## LLM trial: does an LLM reading the analogs, plus physical context, help?
+
+**Setup** (`llm_trial/`): predict the knee from the first 100 cycles.
+- **Folds:** 3 folds of 14 cells, each predicted using only the other 28. A plain leave-one-cell-out
+  would leak in batched prompts: one cell's knee would appear in another cell's analog list in the
+  same prompt.
+- **Predictors:** fresh Claude sub-agents (Opus 5.5) with no access to results. Each read one
+  anonymized prompt file and was told not to use other tools.
+- **What every prediction saw:** the query cell's first-100-cycle numbers, plus its 8 most similar
+  reference cells with their known knees.
+- **Condition A:** neutral numbers only ("devices", "steps", p1-p4, no physical meaning).
+- **Condition B:** A plus the chemistry (A123 LFP/graphite 18650, 1.1 Ah, 30 °C, 4C discharge), the
+  protocol explained physically (current in the high-SOC window, time-averaged C-rate), resistance
+  and temperature trends, and an instruction to apply knowledge of degradation mechanisms (plating,
+  SEI, loss of active material).
+- **Each prediction:** a knee cycle plus a 10-90% interval and a one-line reason.
+
+No voltage curves are available for these cells, so **DVA could not be tested** here.
+
+| method (same folds) | knee error, all 42 | 39 typical cells | 3 short-lived cells | 10-90% interval covers actual | rank corr., typical |
+|---|---|---|---|---|---|
+| average of other cells | 44 | 31 | 211 | - | -0.01 |
+| ridge regression | 46 | 43 | 87 | - | 0.03 |
+| numeric analogs (8 cells) | 28 | **18** | 150 | 79% (min-max of 8) | 0.16 |
+| **LLM A** (numbers + analogs) | **27** | 24 | **63** | 76% | 0.13 |
+| **LLM B** (+ chemistry, physics, mechanisms) | **27** | 24 | 70 | 81% | 0.10 |
+
+The LLMs differ from the numeric analogs by −1 cycle on average, 95% CI [−12, +8].
+
+**Findings**
+
+1. **Same overall accuracy, but complementary errors.**
+   - The numeric analogs are better on typical cells (18 vs 24 cycles).
+   - The LLM is much better on the cells with no precedent. Cell 1 (actual knee at 79) was predicted
+     at 269 by the analogs and at 110 (A) / 95 (B) by the LLM; cell 0 (147) at 232 vs 130 / 115.
+     The LLM *extrapolates*: "its fade is 3-5x steeper than the fastest analogs, so the knee comes
+     earlier than theirs". Averaging the numbers can't do that.
+   - The same willingness to extrapolate gave one false alarm: a typical cell with steady early fade
+     (knee about 405) was predicted at about 220 in both conditions.
+2. **Physical context (B) did not improve the predictions.** The rationales became mechanistic
+   ("6C at high SOC → plating → early knee"), but the numbers barely changed: the median difference
+   between A and B is 3 cycles. Here the extrapolation came from reading the numbers, not from
+   chemistry knowledge.
+3. **The intervals are well calibrated.** The LLM's 10-90% intervals contained the actual knee
+   76-81% of the time.
+4. **Averaging the two methods does not help** (MAE 26). It halves both advantages. A routing rule
+   (use the LLM when the query lies outside its analogs' range) is a plausible next test; it was
+   *not* evaluated here, to avoid tuning on these results.
+5. **Leakage check.** 5 of 6 predictor runs, including two of three in the neutral condition A,
+   said they recognized the dataset as Severson et al. 2019. All said they could not recall
+   individual cells. Treat these LLM numbers as optimistic. The clean test needs unpublished data,
+   ideally with check-up cycles so that DVA can be added.
+
+Files: `reports/severson_b2/llm_trial/` holds the prompts, raw responses, answer key, scored table
+and figure. Build the prompts with `llm_trial/build_trial.py`, score with `llm_trial/score_trial.py`,
+and plot with `llm_trial/plot_trial.py`.
+

@@ -31,6 +31,10 @@ In short:
 - Within the main group, no method ranks cells yet.
 - Cells without similar peers are missed.
 - Close to the knee, analogs give the sharpest early warning (AUC 0.98 for "knee within 50 cycles").
+- **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
+  typical cells but far better on cells with no precedent, because it extrapolates beyond the
+  analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
+  [docs/results_severson_b2.md](docs/results_severson_b2.md).
 
 ## Quick start
 
@@ -61,6 +65,7 @@ knee_analogs/
   evaluate.py           leave-one-cell-out tests A and B, baselines, summaries
   inspect_datasets.py   read-only overview of a dataset folder
 run_study.py            runs everything for one dataset folder, writes reports/<dataset>/
+llm_trial/              blinded LLM trial: build prompts, score, plot
 scripts/                data download helpers
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
