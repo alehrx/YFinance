@@ -36,6 +36,10 @@ class DatasetSpec:
     name: str = "severson_b2"
     nominal_ah: float = NOMINAL_AH
     eol_fraction: float = EOL_FRACTION           # end of life at this fraction of nominal
+    # "nominal": end of life = eol_fraction x nominal_ah (Severson); "initial": eol_fraction x the
+    # cell's own initial capacity (median of its first 10 smoothed points), for datasets whose
+    # protocols use different voltage windows
+    eol_basis: str = "nominal"
     # cells whose first cycles are below this fraction of nominal are skipped (Severson batch 2:
     # cells continued from batch 1). None keeps every cell.
     min_start_fraction: float | None = 1.04 / 1.1
@@ -50,6 +54,14 @@ class DatasetSpec:
     snapshot_start: int = 60
     state_window: int = 50                       # fade rate is measured over this many cycles
     warning_window: int = 50
+    # Where the knee and end of life are measured. "QD": the per-cycle capacity (Severson).
+    # "checkup": the slow check-up capacities in <folder>/checkups/<cell>.csv (columns cycle, QD),
+    # treated as sparse points; the per-cycle table still provides every input feature.
+    knee_from: str = "QD"
+    # only breakpoints where the fade accelerates count as a knee
+    knee_accelerating_only: bool = False
+    # cells left out of the study, {cell: reason}; decided from the capacity curves only
+    exclude_cells: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)    # free-form notes (chemistry, conditions...)
 
     @property
@@ -151,11 +163,41 @@ def load_cells(folder: str, pattern: str = "*.csv", min_start_capacity: float | 
         if min_start_capacity is not None and d["QDs"].iloc[:10].median() < min_start_capacity:
             continue
         name = re.sub(r"_data\.csv$|\.csv$", "", os.path.basename(f))
+        if name in spec.exclude_cells:
+            continue
         d.attrs["spec"] = spec
+        d.attrs["q_initial"] = float(d["QDs"].iloc[:10].median())
         d.attrs["policy"] = str(d["charge_policy"].iloc[0]) if "charge_policy" in d else ""
         d.attrs["condition"] = str(d["condition"].iloc[0]) if "condition" in d else d.attrs["policy"]
+        if spec.knee_from == "checkup":
+            p = os.path.join(os.path.dirname(f), "checkups", os.path.basename(f))
+            if not os.path.exists(p):
+                continue
+            c = _clean(pd.read_csv(p)[["cycle", "QD"]], dataclasses.replace(spec, sparse=True))
+            if len(c) < 6:
+                continue
+            # tuples, not a DataFrame: pandas compares attrs when combining frames
+            d.attrs["ref"] = (tuple(c["cycle"].astype(float)), tuple(c["QDs"].astype(float)))
+            d.attrs["ref_q_initial"] = float(c["QDs"].iloc[:3].median())
         cells[name] = d
     return cells
+
+
+def target_frame(d: pd.DataFrame) -> pd.DataFrame:
+    """The capacity series on which knee and end of life are measured: the cell's own table, or
+    its check-up capacities when ``spec.knee_from == "checkup"`` (sparse points, no smoothing)."""
+    spec = spec_of(d)
+    if spec.knee_from == "QD":
+        return d
+    if spec.knee_from != "checkup":
+        raise ValueError(f"knee_from must be 'QD' or 'checkup', not {spec.knee_from!r}")
+    if "ref" not in d.attrs:  # already a target frame, or a cell without check-ups
+        raise ValueError("knee_from='checkup' but this cell has no check-up data")
+    t = pd.DataFrame({"cycle": d.attrs["ref"][0], "QDs": d.attrs["ref"][1]})
+    t["QD"] = t["QDs"]
+    t.attrs["spec"] = dataclasses.replace(spec, sparse=True, knee_from="QD")
+    t.attrs["q_initial"] = d.attrs["ref_q_initial"]
+    return t
 
 
 def near_duplicates(cells: dict, tol_frac: float = 0.002) -> list[tuple[str, str, float]]:
@@ -177,11 +219,25 @@ def near_duplicates(cells: dict, tol_frac: float = 0.002) -> list[tuple[str, str
     return out
 
 
+def eol_ah(d: pd.DataFrame) -> float:
+    """End-of-life capacity of this cell (Ah), from ``spec.eol_basis``."""
+    d = target_frame(d)
+    spec = spec_of(d)
+    if spec.eol_basis == "initial":
+        q0 = d.attrs.get("q_initial", float(d["QDs"].iloc[:10].median()))
+        return spec.eol_fraction * q0
+    if spec.eol_basis != "nominal":
+        raise ValueError(f"eol_basis must be 'nominal' or 'initial', not {spec.eol_basis!r}")
+    return spec.eol_ah
+
+
 def eol_cycle(d: pd.DataFrame) -> float:
     """First cycle below end of life (interpolated between check-ups for sparse data); the last
     cycle if the cell never got there (see ``reached_eol``)."""
+    d = target_frame(d)
     spec = spec_of(d)
-    below = np.flatnonzero(d["QDs"].to_numpy() < spec.eol_ah)
+    eol = eol_ah(d)
+    below = np.flatnonzero(d["QDs"].to_numpy() < eol)
     if not len(below):
         return float(d["cycle"].iloc[-1])
     j = below[0]
@@ -189,18 +245,23 @@ def eol_cycle(d: pd.DataFrame) -> float:
         return float(d["cycle"].iloc[j])
     x0, x1 = d["cycle"].iloc[j - 1], d["cycle"].iloc[j]
     y0, y1 = d["QDs"].iloc[j - 1], d["QDs"].iloc[j]
-    return float(x0 + (y0 - spec.eol_ah) / (y0 - y1) * (x1 - x0))
+    return float(x0 + (y0 - eol) / (y0 - y1) * (x1 - x0))
 
 
 def reached_eol(d: pd.DataFrame) -> bool:
-    return bool((d["QDs"] < spec_of(d).eol_ah).any())
+    d = target_frame(d)
+    return bool((d["QDs"] < eol_ah(d)).any())
 
 
 def knee_point(d: pd.DataFrame, until_eol: bool = True) -> tuple[float, float, float]:
     """Bacon-Watts-style knee: the breakpoint of a continuous two-segment linear fit to the
     smoothed capacity curve (up to end of life). Returns (knee cycle, slope before, slope after),
     slopes in mAh per cycle. For sparse data the breakpoint is kept at least 3 check-ups from
-    either end, so each segment rests on real points; with fewer than 6 points it is NaN."""
+    either end, so each segment rests on real points; with fewer than 6 points it is NaN.
+    With ``spec.knee_accelerating_only`` only breakpoints where the fade gets faster are allowed.
+    The series is ``target_frame(d)`` (the check-ups if ``spec.knee_from == "checkup"``)."""
+    d = target_frame(d)
+    accel_only = spec_of(d).knee_accelerating_only
     x = d["cycle"].to_numpy(float)
     y = d["QDs"].to_numpy(float)
     if until_eol:
@@ -216,6 +277,8 @@ def knee_point(d: pd.DataFrame, until_eol: bool = True) -> tuple[float, float, f
     for b in np.linspace(lo, hi, 200):
         A = np.column_stack([np.ones_like(x), x, np.maximum(0, x - b)])
         coef, *_ = np.linalg.lstsq(A, y, rcond=None)
+        if accel_only and coef[2] >= 0:
+            continue
         sse = ((A @ coef - y) ** 2).sum()
         if sse < best[0]:
             best = (sse, b, coef[1], coef[1] + coef[2])
@@ -251,7 +314,20 @@ def early_features(d: pd.DataFrame, n: int) -> dict:
             v = e[col].replace(0, np.nan)
             out[f"{col}_start"] = v.iloc[:10].median()
             out[f"{col}_delta"] = v[e["cycle"] > n - 0.25 * n].median() - v.iloc[:10].median()
-    out.update(parse_policy(d.attrs.get("policy", "")))
+    out.update(protocol_features(d))
+    return out
+
+
+def protocol_features(d: pd.DataFrame) -> dict:
+    """Descriptors of the test protocol, fixed before the test starts (so known at prediction
+    time): the Severson charge policy if the cell has one, plus any ``proto_*`` column of the
+    per-cell table (constant per cell, written by the dataset adapter)."""
+    out = {}
+    if d.attrs.get("policy", ""):
+        out.update(parse_policy(d.attrs["policy"]))
+    for col in d.columns:
+        if col.startswith("proto_"):
+            out[col] = float(d[col].iloc[0])
     return out
 
 

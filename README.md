@@ -25,12 +25,17 @@ instead of text). It is tested leave-one-cell-out against regression and simple 
 | dataset | cells | knee error from first 100 cycles, analogs / regression / average | details |
 |---|---|---|---|
 | Severson 2019, batch 2017-06-30 (LFP/graphite, fast charging) | 42 | 28 / 36 / 45 cycles | [docs/results_severson_b2.md](docs/results_severson_b2.md) |
+| LSD first life (2.4 Ah, 16 protocols, knee from C/5 check-ups) | 75 | 45 / 99 / 299 cycles; same-protocol average 41 | [docs/results_lsd1.md](docs/results_lsd1.md) |
 
 In short:
 - Analogs beat regression and the average, mostly by identifying which group a cell belongs to.
 - Within the main group, no method ranks cells yet.
 - Cells without similar peers are missed.
 - Close to the knee, analogs give the sharpest early warning (AUC 0.98 for "knee within 50 cycles").
+- **LSD, 16 protocols:** analogs beat regression by about half, but only match the average of the other
+  cells with the same protocol, which the protocol makes easy to find. Within a protocol, no method ranks
+  cells well. Voltage-curve features (ΔQ(V), dQ/dV, DVA) do not help the analogs. On an unseen protocol
+  the analogs fail and regression on the protocol settings does best.
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
   analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
@@ -67,10 +72,15 @@ Set them from the dataset's description, before looking at any result:
 | `sparse` | capacity only at check-ups: no smoothing, knee at least 3 check-ups from either end, end of life interpolated | false |
 | `early_cycles`, `main_n` | Test A: predict from the first N cycles; N for the headline and figures | 50-200, 100 |
 | `checkpoints`, `state_window`, `warning_window` | Test B checkpoints, fade-rate window, "knee within" window (cycles) | 100-350, 50, 50 |
+| `eol_basis` | `"nominal"` or `"initial"`: end of life relative to nominal or to each cell's own initial capacity | nominal |
+| `knee_from` | `"QD"` or `"checkup"`: measure knee and end of life on the per-cycle capacity or on `checkups/<cell>.csv` | QD |
+| `knee_accelerating_only` | only breakpoints where the fade gets faster count as a knee | false |
+| `exclude_cells` | `{cell: reason}` for cells left out, decided from the capacity curves only | {} |
 
 `run_study.py` also writes `knees.csv` (knee, end of life, whether it was reached),
 `near_duplicates.csv`, `testA_detail.csv` (error overall, on the main group and on outliers, rank
-correlation within the main group, range coverage) and the bootstrap CI of analogs minus regression.
+correlation within the main group and within each condition, range coverage) and the bootstrap CIs of
+analogs minus regression and minus the average of same-condition cells.
 When at least two conditions have two or more cells each, it also runs leave-one-condition-out.
 `prompts/local_session.md` is a ready-made prompt for a Claude Code session on your own computer.
 
@@ -81,9 +91,11 @@ knee_analogs/
   core.py               loading (de-duplicates files), smoothing, knee detection, early-cycle features
   evaluate.py           leave-one-cell-out tests A and B, baselines, summaries
   inspect_datasets.py   read-only overview of a dataset folder
+  voltage_features.py   ΔQ(V), dQ/dV and DVA features from adapter-written curves
 run_study.py            runs everything for one dataset folder, writes reports/<dataset>/
 llm_trial/              blinded LLM trial: build prompts, score, plot
-scripts/                data download helpers
+scripts/                data download helpers, dataset adapters (convert_lsd.py), knee review
+                        (check_knees.py), voltage-feature comparison
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching

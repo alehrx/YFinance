@@ -174,3 +174,45 @@ def test_run_study_end_to_end_dense_and_sparse(tmp_path, monkeypatch):
         finally:
             import shutil
             shutil.rmtree(out, ignore_errors=True)
+
+
+def test_checkup_knee_target_exclusions_and_condition_baseline(tmp_path):
+    """knee_from='checkup' measures the knee on checkups/<cell>.csv, exclude_cells drops cells, and
+    the same-condition average never uses the query cell."""
+    import json
+
+    from knee_analogs.core import eol_cycle, target_frame
+
+    (tmp_path / "checkups").mkdir()
+    knees = [260, 300, 340, 280, 320, 360, 400]
+    for i, k in enumerate(knees):
+        d = synthetic_cell(k, i)
+        d["condition"] = f"P{i % 2}"
+        d.drop(columns="charge_policy").to_csv(tmp_path / f"cell{i}.csv", index=False)
+        cu = d[d["cycle"] % 5 == 1][["cycle", "QD"]]
+        cu.to_csv(tmp_path / "checkups" / f"cell{i}.csv", index=False)
+    spec = {"nominal_ah": 1.1, "eol_fraction": 0.85, "eol_basis": "initial", "min_start_fraction": None,
+            "knee_from": "checkup", "knee_accelerating_only": True, "exclude_cells": {"cell6": "test"}}
+    (tmp_path / "dataset.json").write_text(json.dumps(spec))
+    cells = load_cells(str(tmp_path))
+    assert "cell6" not in cells and len(cells) == 6
+    for i, (name, d) in enumerate(cells.items()):
+        t = target_frame(d)
+        assert t["cycle"].iloc[1] - t["cycle"].iloc[0] == 5          # measured on the check-ups
+        assert abs(knee_point(d)[0] - knees[int(name[4:])]) < 40
+        assert eol_cycle(d) <= t["cycle"].iloc[-1]
+    T, C = cell_table(cells, 100)
+    P = loco_knee(T, C)
+    for cell, r in P.iterrows():
+        others = T[(T["condition"] == r["condition"]) & (T.index != cell)]["knee"]
+        assert np.isclose(r["condition_mean"], np.exp(np.log(others).mean()))
+
+
+def test_rank_corr_within_condition_ignores_differences_between_conditions():
+    from knee_analogs.evaluate import rank_corr_within_condition
+
+    # predictions get the conditions right but rank cells inside each condition backwards
+    P = pd.DataFrame({"condition": ["a"] * 4 + ["b"] * 4,
+                      "actual": [100, 110, 120, 130, 500, 510, 520, 530],
+                      "m": [130, 120, 110, 100, 530, 520, 510, 500]})
+    assert rank_corr_within_condition(P, "m") < -0.9

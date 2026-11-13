@@ -1,0 +1,16 @@
+,0
+n_checks,285.0
+share_knee_within_window,0.1368421052631579
+MAE_analogs,130.26139469276205
+MAE_regression,117.10930295882697
+MAE_cycle_count_only,237.59168650268887
+MAE_condition_cycle_count,48.415604809763124
+AUC_soon_analogs,0.941786533249948
+AUC_soon_regression,0.9544506983531373
+AUC_soon_cycle_count_only,0.5139670627475506
+n_condition_cycle_count,280.0
+AUC_soon_condition_cycle_count,0.9469387755102041
+AUC_soon_analogs_same_checks,0.9426239067055394
+MAE_analogs_same_checks,131.16600861450107
+AUC_soon_regression_same_checks,0.952069970845481
+MAE_regression_same_checks,115.73573113256752

@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from knee_analogs import evaluate as ev
-from knee_analogs.core import eol_cycle, knee_point, load_cells, near_duplicates, reached_eol, spec_of
+from knee_analogs.core import eol_ah, eol_cycle, knee_point, load_cells, near_duplicates, reached_eol, spec_of, target_frame
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "reports" / "severson_b2"   # set from --data in main()
@@ -28,10 +28,10 @@ FIG = OUT / "figs"
 plt.style.use(str(ROOT / "journal.mplstyle"))
 mm = 1 / 25.4
 BLUE, VERM, GREEN, ORANGE, PINK, SKY, GREY = "#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#6b6b6b"
-LABEL = {"mean": "average of other cells", "protocol_regression": "regression on protocol",
+LABEL = {"mean": "average of other cells", "condition_mean": "average of same-condition cells", "protocol_regression": "regression on protocol",
          "early_regression": "regression on early-cycle features", "analogs_features": "analogs: early-cycle features",
          "analogs_curve": "analogs: curve shape", "analogs_combined": "analogs: features + curve"}
-COLOR = {"mean": GREY, "protocol_regression": SKY, "early_regression": GREEN, "analogs_features": VERM,
+COLOR = {"mean": GREY, "condition_mean": "#999933", "protocol_regression": SKY, "early_regression": GREEN, "analogs_features": VERM,
          "analogs_curve": ORANGE, "analogs_combined": PINK}
 
 
@@ -50,7 +50,8 @@ def save(fig, name):
 def ylim(cells):
     spec = spec_of(next(iter(cells.values())))
     top = max(spec.nominal_ah, max(d["QDs"].iloc[:10].median() for d in cells.values()))
-    return spec.eol_ah - 0.07 * spec.nominal_ah, top * 1.005
+    low = min(min(eol_ah(d), target_frame(d)["QDs"].min()) for d in cells.values())
+    return low - 0.07 * spec.nominal_ah, top * 1.005
 
 
 def fig_knees(cells):
@@ -62,8 +63,12 @@ def fig_knees(cells):
     yl = ylim(cells)
     for ax, (kn, k) in zip(axes.ravel(), rows):
         d = cells[k]
+        t = target_frame(d)  # the series the knee is measured on (check-ups, if so configured)
         ax.plot(d["cycle"], d["QD"], color="#c8c8c8", lw=0.5)
-        ax.plot(d["cycle"], d["QDs"], color=BLUE, lw=0.9, marker="o" if spec_of(d).sparse else None, ms=1.5)
+        if t is not d:
+            ax.plot(t["cycle"], t["QDs"], color=GREEN, lw=0.8, marker="o", ms=0.8)
+        else:
+            ax.plot(d["cycle"], d["QDs"], color=BLUE, lw=0.9, marker="o" if spec_of(d).sparse else None, ms=1.5)
         ax.axvline(kn, color=VERM, lw=0.9)
         if reached_eol(d):
             ax.axvline(eol_cycle(d), color=GREY, lw=0.6, ls="--")
@@ -80,13 +85,15 @@ def fig_knees(cells):
 def fig_testA(curves_by_n, P100, main_n):
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(170 * mm, 72 * mm), layout="constrained")
     ns = sorted(curves_by_n)
-    for m in ["mean", "protocol_regression", "early_regression", "analogs_curve", "analogs_features"]:
+    for m in ["mean", "condition_mean", "protocol_regression", "early_regression", "analogs_curve", "analogs_features"]:
+        if m not in curves_by_n[ns[0]].index:
+            continue
         a1.plot(ns, [curves_by_n[n].loc[m, "MAE_cycles"] for n in ns], "o-", color=COLOR[m], label=LABEL[m], ms=4)
     a1.set_xlabel("cycles observed before predicting")
     a1.set_ylabel("mean abs. error of knee cycle")
     a1.set_xticks(ns); a1.tick_params(axis="x", which="minor", bottom=False)
     a1.set_ylim(0, None)
-    a1.legend(fontsize=7, loc="lower left")
+    a1.legend(fontsize=6.5, loc="upper left", bbox_to_anchor=(0, 0.93))
     clean(a1)
     v = P100[["actual", "early_regression", "analogs_features"]].to_numpy()
     lim = [0.9 * np.nanmin(v), 1.05 * np.nanmax(v)]
@@ -128,9 +135,14 @@ def fig_examples(cells, P100, picks, main_n):
 def fig_testB(W, summ, window):
     fig, ax = plt.subplots(figsize=(120 * mm, 70 * mm), layout="constrained")
     g = W.groupby("cycle")
-    for m, col, lab in [("cycle_count_only", GREY, "cycle count only"), ("regression", GREEN, "regression on state"),
+    for m, col, lab in [("cycle_count_only", GREY, "cycle count only"),
+                        ("condition_cycle_count", "#999933", "cycle count, same condition"),
+                        ("regression", GREEN, "regression on state"),
                         ("analogs", VERM, "analogs: similar state in other cells")]:
-        ax.plot(g.size().index, g.apply(lambda x: (x[m] - x["actual"]).abs().mean()), "o-", color=col, ms=4,
+        if m not in W or W[m].isna().all():
+            continue
+        ax.plot(g.size().index, g.apply(lambda x: (x[m] - x["actual"]).abs().mean(), include_groups=False), "o-",
+                color=col, ms=4,
                 label=f"{lab}")
     ax.set_xlabel("checkpoint cycle"); ax.set_ylabel("mean abs. error of\ncycles left until the knee")
     ax.set_ylim(0, None)
@@ -154,13 +166,14 @@ def main():
     pd.set_option("display.width", 200)
     cells = load_cells(args.data)
     spec = spec_of(next(iter(cells.values())))
-    print(f"{len(cells)} cells; nominal {spec.nominal_ah} Ah, end of life at {spec.eol_fraction:.0%}"
+    print(f"{len(cells)} cells; nominal {spec.nominal_ah} Ah, end of life at {spec.eol_fraction:.0%} of {spec.eol_basis}"
           f"{', sparse check-ups' if spec.sparse else ''}")
     dups = near_duplicates(cells)
     if dups:
         print("WARNING near-identical cells (check before trusting any result):", dups)
     pd.DataFrame(dups, columns=["cell_a", "cell_b", "rms_Ah"]).to_csv(OUT / "near_duplicates.csv", index=False)
     knees = pd.DataFrame([{"cell": k, "knee": knee_point(d)[0], "eol": eol_cycle(d), "reached_eol": reached_eol(d),
+                           "eol_ah": eol_ah(d),
                            "condition": d.attrs.get("condition", ""), "last_cycle": d["cycle"].iloc[-1],
                            "points": len(d)} for k, d in cells.items()]).set_index("cell")
     knees.to_csv(OUT / "knees.csv")
@@ -176,14 +189,20 @@ def main():
         P.to_csv(OUT / f"testA_predictions_first{n}.csv")
         if n == spec.main_n:
             P100 = P
-        bd = details[n].attrs.get("analogs_minus_regression", {})
-        print(f"\nknee from first {n} cycles\n" + details[n].round(2).to_string()
-              + (f"\nanalogs - regression MAE: {bd['diff']:.1f} cycles, 95% CI [{bd['ci_lo']:.1f}, {bd['ci_hi']:.1f}]"
-                 if bd else ""))
+        print(f"\nknee from first {n} cycles\n" + details[n].round(2).to_string())
+        for key, lab in [("analogs_minus_regression", "analogs - regression"),
+                         ("analogs_minus_condition_mean", "analogs - same-condition average")]:
+            bd = details[n].attrs.get(key, {})
+            if bd:
+                print(f"{lab} MAE: {bd['diff']:.1f} cycles, 95% CI [{bd['ci_lo']:.1f}, {bd['ci_hi']:.1f}]")
     pd.concat(summaries, names=["first_n_cycles"]).to_csv(OUT / "testA_summary.csv")
     pd.concat(details, names=["first_n_cycles"]).to_csv(OUT / "testA_detail.csv")
     pd.DataFrame({n: details[n].attrs.get("analogs_minus_regression", {}) for n in details}).T.rename_axis(
         "first_n_cycles").to_csv(OUT / "testA_analogs_minus_regression_ci.csv")
+    cm = {n: details[n].attrs["analogs_minus_condition_mean"] for n in details
+          if "analogs_minus_condition_mean" in details[n].attrs}
+    if cm:
+        pd.DataFrame(cm).T.rename_axis("first_n_cycles").to_csv(OUT / "testA_analogs_minus_condition_mean_ci.csv")
     T, C = ev.cell_table(cells, spec.main_n)
     pe = ev.summarize(ev.loco_knee(T, C, target="eol"))
     pe.to_csv(OUT / f"testA_eol_first{spec.main_n}_summary.csv")
