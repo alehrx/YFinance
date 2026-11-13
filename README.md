@@ -53,9 +53,26 @@ python -m knee_analogs.inspect_datasets "C:\Users\alexa\Datasets Batteries" > da
 
 This gives a read-only overview: file types, columns or variables, and the first rows. `run_study.py`
 expects a folder with one CSV per cell containing `cycle` and `QD` (discharge capacity, Ah),
-plus optionally `IR`, `Tavg`, `chargetime` and `charge_policy`. Other formats need a small adapter
-that writes that layout to `data/<dataset>/`. `prompts/local_session.md` is a ready-made prompt for
-a Claude Code session on your own computer to do this.
+plus optionally `IR`, `Tavg`, `chargetime`, `charge_policy` and `condition`. Other formats need a
+small adapter that writes that layout to `data/<dataset>/`.
+
+The adapter also writes `data/<dataset>/dataset.json` with the per-dataset settings
+(`knee_analogs.core.DatasetSpec`). Without the file, the Severson batch-2 settings are used.
+Set them from the dataset's description, before looking at any result:
+
+| key | meaning | Severson default |
+|---|---|---|
+| `nominal_ah`, `eol_fraction` | end of life = `eol_fraction` x `nominal_ah` | 1.1, 0.8 |
+| `min_start_fraction` | skip cells starting below this fraction of nominal (`null` keeps all) | 0.945 |
+| `sparse` | capacity only at check-ups: no smoothing, knee at least 3 check-ups from either end, end of life interpolated | false |
+| `early_cycles`, `main_n` | Test A: predict from the first N cycles; N for the headline and figures | 50-200, 100 |
+| `checkpoints`, `state_window`, `warning_window` | Test B checkpoints, fade-rate window, "knee within" window (cycles) | 100-350, 50, 50 |
+
+`run_study.py` also writes `knees.csv` (knee, end of life, whether it was reached),
+`near_duplicates.csv`, `testA_detail.csv` (error overall, on the main group and on outliers, rank
+correlation within the main group, range coverage) and the bootstrap CI of analogs minus regression.
+When at least two conditions have two or more cells each, it also runs leave-one-condition-out.
+`prompts/local_session.md` is a ready-made prompt for a Claude Code session on your own computer.
 
 ## Layout
 

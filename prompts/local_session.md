@@ -1,12 +1,13 @@
 I want to test whether nearest-neighbour "analogs" (a numeric RAG), and an LLM reading those analogs, can predict the **knee** of lithium-ion battery capacity-fade curves using my own datasets in `C:\Users\alexa\Datasets Batteries`. First within one dataset, then **across datasets**, then with an **LLM given extra information** (DVA, operating history).
 
 ## Setup
-Repo `https://github.com/alehrx/YFinance` (being renamed to `battery-knee-analogs`; the old URL keeps redirecting). The work is on branch `claude/sp500-news-metrics-rag-8lqacw`:
+Repo `https://github.com/alehrx/YFinance` (being renamed to `battery-knee-analogs`; the old URL keeps redirecting). The work is on branch `alexhrx/gallant-noether-hqjsxi` (built on `claude/sp500-news-metrics-rag-8lqacw`); commit and push there:
 
 ```
-git fetch origin claude/sp500-news-metrics-rag-8lqacw
-git checkout claude/sp500-news-metrics-rag-8lqacw
+git fetch origin alexhrx/gallant-noether-hqjsxi
+git checkout alexhrx/gallant-noether-hqjsxi
 pip install -r requirements.txt
+python -m pytest -q tests
 ```
 
 Clone the repo first if this folder isn't a clone of it. Then read `README.md` and `docs/results_severson_b2.md`. The relevant files:
@@ -18,6 +19,7 @@ Clone the repo first if this folder isn't a clone of it. Then read `README.md` a
   - Test A: predict the knee from the first N cycles. Compares analogs (5 most similar cells) with ridge regression, protocol-only regression and the plain average.
   - Test B: early warning, matching a cell's current state to snapshots of other cells to predict cycles left until the knee.
 - `run_study.py --data <folder>`: runs everything and writes `reports/<folder name>/*.csv` and figures.
+- **Already prepared for step 3:** per-dataset settings in `data/<dataset>/dataset.json` (`DatasetSpec` in `core.py`: nominal capacity, end-of-life fraction, sparse check-up mode, Test A/B cycles). There is also a near-duplicate check, the main-group / outlier split (Tukey fences on the actual knees), the bootstrap CI, the rank correlation and leave-one-condition-out. See the README section "Using your own datasets". The adapter only has to write the per-cell CSVs plus `dataset.json`.
 - `knee_analogs/inspect_datasets.py`: read-only overview of a dataset folder.
 - `llm_trial/`: the blinded LLM trial.
   - `build_trial.py` builds anonymized prompts in folds: each fold's query cells are matched only to cells outside the fold, so no query's knee appears in another query's analog list.

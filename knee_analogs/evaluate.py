@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import roc_auc_score
 
-from .core import curve_vector, early_features, eol_cycle, knee_point
+from .core import curve_vector, early_features, eol_cycle, knee_point, spec_of
 
 PROTOCOL = ["C1", "Q1", "C2", "C_avg"]
 
@@ -19,7 +19,7 @@ def cell_table(cells: dict, n: int) -> tuple[pd.DataFrame, np.ndarray]:
         if not f:
             continue
         kn, s1, s2 = knee_point(d)
-        rows.append({"cell": name, "knee": kn, "eol": eol_cycle(d), **f})
+        rows.append({"cell": name, "knee": kn, "eol": eol_cycle(d), "condition": d.attrs.get("condition", ""), **f})
         curves.append(curve_vector(d, n))
     return pd.DataFrame(rows).set_index("cell"), np.array(curves)
 
@@ -37,13 +37,21 @@ def _knn(dist: np.ndarray, y: np.ndarray, k: int):
     return float(np.exp(w @ np.log(y[idx]))), idx
 
 
-def loco_knee(T: pd.DataFrame, curves: np.ndarray, k: int = 5, target: str = "knee") -> pd.DataFrame:
-    """Predict each cell's knee (or EOL) cycle from the other cells only."""
-    feats = [c for c in T.columns if c not in ("knee", "eol")]
+NON_FEATURES = ("knee", "eol", "condition")
+
+
+def loco_knee(T: pd.DataFrame, curves: np.ndarray, k: int = 5, target: str = "knee",
+              leave_out: str = "cell") -> pd.DataFrame:
+    """Predict each cell's knee (or EOL) cycle from the other cells only.
+
+    ``leave_out="condition"`` removes every cell of the query's condition from the training
+    cells (scaling, regression and analogs), to test transfer to an unseen condition."""
+    feats = [c for c in T.columns if c not in NON_FEATURES]
     y = T[target].to_numpy(float)
+    groups = T["condition"].to_numpy() if leave_out == "condition" else T.index.to_numpy()
     out = []
     for i, cell in enumerate(T.index):
-        tr = np.arange(len(T)) != i
+        tr = groups != groups[i]
         Ttr, ytr = T.iloc[tr], y[tr]
         r = {"cell": cell, "actual": y[i], "mean": float(np.exp(np.log(ytr).mean()))}
         for name, cols in [("protocol_regression", PROTOCOL), ("early_regression", feats)]:
@@ -85,25 +93,40 @@ def summarize(P: pd.DataFrame) -> pd.DataFrame:
 STATE = ["fade", "slope_50", "accel", "IR_delta", "Tavg_delta", "C_avg", "C1", "C2"]
 
 
-def snapshots(cells: dict, step: int = 10, start: int = 60) -> pd.DataFrame:
+def snapshots(cells: dict, step: int | None = None, start: int | None = None,
+              window: int | None = None) -> pd.DataFrame:
     """State of each cell every ``step`` cycles up to its knee: how much capacity it has
-    lost, how fast it is fading now, whether fade is accelerating; plus cycles to the knee."""
+    lost, how fast it is fading now (over the last ``window`` cycles), whether fade is
+    accelerating; plus cycles to the knee. Defaults come from the cells' ``DatasetSpec``.
+    For sparse data a snapshot is taken only at cycles with a check-up, and a fade rate
+    needs 2 check-ups in the window instead of 20 cycles. The column is still called
+    ``slope_50`` whatever the window."""
     from .core import parse_policy
 
     rows = []
     for name, d in cells.items():
+        spec = spec_of(d)
+        st = step or spec.snapshot_step
+        s0_ = start or spec.snapshot_start
+        win = window or spec.state_window
+        need = 2 if spec.sparse else 20
         kn, _, _ = knee_point(d)
+        if not np.isfinite(kn):
+            continue
         pol = parse_policy(d.attrs.get("policy", ""))
         x, y = d["cycle"].to_numpy(float), d["QDs"].to_numpy(float)
-        q0 = np.median(y[(x >= 2) & (x <= 10)])
-        for m in range(start, int(kn) + 1, step):
-            w1 = (x > m - 50) & (x <= m)
-            w0 = (x > m - 100) & (x <= m - 50)
-            if w1.sum() < 20:
+        first = (x >= 2) & (x <= 10)
+        q0 = np.median(y[first]) if first.any() else y[0]
+        ms = x[(x >= s0_) & (x <= kn)] if spec.sparse else range(s0_, int(kn) + 1, st)
+        for m in ms:
+            w1 = (x > m - win) & (x <= m)
+            w0 = (x > m - 2 * win) & (x <= m - win)
+            if w1.sum() < need:
                 continue
             s1 = np.polyfit(x[w1], y[w1], 1)[0] * 1000
-            s0 = np.polyfit(x[w0], y[w0], 1)[0] * 1000 if w0.sum() >= 20 else s1
-            r = {"cell": name, "cycle": m, "fade": (np.median(y[w1][-10:]) - q0) * 1000,
+            s0 = np.polyfit(x[w0], y[w0], 1)[0] * 1000 if w0.sum() >= need else s1
+            r = {"cell": name, "cycle": m, "condition": d.attrs.get("condition", ""),
+                 "fade": (np.median(y[w1][-10:]) - q0) * 1000,
                  "slope_50": s1, "accel": s1 - s0, "to_knee": kn - m, **pol}
             for col in ("IR", "Tavg"):
                 if col in d:
@@ -113,19 +136,35 @@ def snapshots(cells: dict, step: int = 10, start: int = 60) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _at(S: pd.DataFrame, m: float, window: float, sparse: bool) -> pd.DataFrame:
+    """The snapshot at cycle ``m``; for sparse check-ups, the latest one within ``window``
+    cycles before ``m``."""
+    q = S[S["cycle"] == m]
+    if not sparse or len(q):
+        return q
+    q = S[(S["cycle"] <= m) & (S["cycle"] > m - window)]
+    return q.iloc[[-1]] if len(q) else q
+
+
 def loco_warning(S: pd.DataFrame, checkpoints=(100, 150, 200, 250, 300, 350), k: int = 15,
-                 window: int = 50) -> pd.DataFrame:
-    """At each checkpoint, predict cycles left until the knee and P(knee within ``window``)."""
+                 window: int = 50, leave_out: str = "cell", sparse: bool = False) -> pd.DataFrame:
+    """At each checkpoint, predict cycles left until the knee and P(knee within ``window``).
+    ``leave_out="condition"`` also removes the query's whole condition from the memory."""
+    STATE_ = [c for c in STATE if c in S and S[c].notna().any()]
     out = []
     for cell in S["cell"].unique():
-        tr, te = S[S["cell"] != cell], S[S["cell"] == cell]
-        Xtr = _scale(tr[STATE], tr[STATE])
+        te = S[S["cell"] == cell]
+        if leave_out == "condition":
+            tr = S[S["condition"] != te["condition"].iloc[0]]
+        else:
+            tr = S[S["cell"] != cell]
+        Xtr = _scale(tr[STATE_], tr[STATE_])
         ridge = RidgeCV(alphas=np.logspace(-2, 3, 30)).fit(Xtr, tr["to_knee"])
         for m in checkpoints:
-            q = te[te["cycle"] == m]
+            q = _at(te, m, window, sparse)
             if q.empty:
                 continue
-            xq = _scale(tr[STATE], q[STATE])[0]
+            xq = _scale(tr[STATE_], q[STATE_])[0]
             dist = np.sqrt(((Xtr - xq) ** 2).mean(1))
             # at most 2 snapshots per other cell, so one look-alike cell cannot dominate
             order = np.argsort(dist)
@@ -137,7 +176,8 @@ def loco_warning(S: pd.DataFrame, checkpoints=(100, 150, 200, 250, 300, 350), k:
                 if len(picked) == k:
                     break
             nb = tr.iloc[picked]["to_knee"].to_numpy()
-            same_cycle = tr[tr["cycle"] == m]["to_knee"]
+            same_cycle = (pd.concat([_at(g, m, window, True) for _, g in tr.groupby("cell")])["to_knee"]
+                          if sparse else tr[tr["cycle"] == m]["to_knee"])
             out.append({"cell": cell, "cycle": m, "actual": float(q["to_knee"].iloc[0]),
                         "analogs": float(np.median(nb)), "analogs_p_soon": float((nb <= window).mean()),
                         "regression": float(ridge.predict(xq[None])[0]),
@@ -157,3 +197,55 @@ def warning_summary(W: pd.DataFrame, window: int = 50) -> dict:
     ok = W["cycle_count_p_soon"].notna()
     res["AUC_soon_cycle_count_only"] = roc_auc_score(soon[ok], W.loc[ok, "cycle_count_p_soon"])
     return res
+
+
+# ------------------------------------------------------------------ statistics for the write-up
+def main_group(actual: pd.Series) -> pd.Series:
+    """Boolean mask of the 'typical' cells: knee inside Tukey's fences (Q1 - 1.5 IQR,
+    Q3 + 1.5 IQR) of all knees. Fixed rule, defined on the truth only, never on predictions."""
+    q1, q3 = actual.quantile([0.25, 0.75])
+    iqr = q3 - q1
+    return (actual >= q1 - 1.5 * iqr) & (actual <= q3 + 1.5 * iqr)
+
+
+def bootstrap_mae_diff(P: pd.DataFrame, a: str, b: str, n_boot: int = 10000, seed: int = 0) -> dict:
+    """MAE(a) - MAE(b) over cells, with a 95% bootstrap CI (resampling cells).
+    Negative means ``a`` is better."""
+    ea = (P[a] - P["actual"]).abs().to_numpy()
+    eb = (P[b] - P["actual"]).abs().to_numpy()
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(ea), (n_boot, len(ea)))
+    boots = ea[idx].mean(1) - eb[idx].mean(1)
+    lo, hi = np.percentile(boots, [2.5, 97.5])
+    return {"diff": float(ea.mean() - eb.mean()), "ci_lo": float(lo), "ci_hi": float(hi)}
+
+
+def rank_corr(P: pd.DataFrame, m: str, mask: pd.Series | None = None) -> float:
+    from scipy.stats import spearmanr
+
+    Q = P if mask is None else P[mask]
+    return float(spearmanr(Q[m], Q["actual"]).statistic) if len(Q) > 2 else np.nan
+
+
+def summarize_detail(P: pd.DataFrame, methods=None) -> pd.DataFrame:
+    """Per method: MAE (cycles, %) overall, on the main group and on the outliers, range
+    coverage, rank correlation within the main group; plus the bootstrap CI of
+    analogs minus regression."""
+    methods = methods or [m for m in METHODS if m in P]
+    typ = main_group(P["actual"])
+    rows = []
+    for m in methods:
+        e = (P[m] - P["actual"]).abs()
+        r = {"method": m, "MAE_cycles": e.mean(), "MAPE_%": (e / P["actual"]).mean() * 100,
+             "MAE_main_group": e[typ].mean(), "MAE_outliers": e[~typ].mean() if (~typ).any() else np.nan,
+             "n_main": int(typ.sum()), "n_outliers": int((~typ).sum()),
+             # leave-one-out average is mechanically anti-correlated with the truth (-1): not reported
+             "rank_corr_main_group": np.nan if m == "mean" else rank_corr(P, m, typ)}
+        if f"{m}_lo" in P:
+            r["range_covers_actual_%"] = ((P[f"{m}_lo"] <= P["actual"]) & (P["actual"] <= P[f"{m}_hi"])).mean() * 100
+        rows.append(r)
+    out = pd.DataFrame(rows).set_index("method")
+    if {"analogs_features", "early_regression"} <= set(P):
+        bd = bootstrap_mae_diff(P, "analogs_features", "early_regression")
+        out.attrs["analogs_minus_regression"] = bd
+    return out
