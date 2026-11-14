@@ -62,6 +62,10 @@ class DatasetSpec:
     knee_accelerating_only: bool = False
     # cells left out of the study, {cell: reason}; decided from the capacity curves only
     exclude_cells: dict = field(default_factory=dict)
+    # cells without a clear knee that stay in the end-of-life test, {cell: reason}
+    no_knee_cells: dict = field(default_factory=dict)
+    # fit the knee only up to end of life (Severson) or over the whole measured trajectory
+    knee_until_eol: bool = True
     extra: dict = field(default_factory=dict)    # free-form notes (chemistry, conditions...)
 
     @property
@@ -253,7 +257,7 @@ def reached_eol(d: pd.DataFrame) -> bool:
     return bool((d["QDs"] < eol_ah(d)).any())
 
 
-def knee_point(d: pd.DataFrame, until_eol: bool = True) -> tuple[float, float, float]:
+def knee_point(d: pd.DataFrame, until_eol: bool | None = None) -> tuple[float, float, float]:
     """Bacon-Watts-style knee: the breakpoint of a continuous two-segment linear fit to the
     smoothed capacity curve (up to end of life). Returns (knee cycle, slope before, slope after),
     slopes in mAh per cycle. For sparse data the breakpoint is kept at least 3 check-ups from
@@ -264,6 +268,8 @@ def knee_point(d: pd.DataFrame, until_eol: bool = True) -> tuple[float, float, f
     accel_only = spec_of(d).knee_accelerating_only
     x = d["cycle"].to_numpy(float)
     y = d["QDs"].to_numpy(float)
+    if until_eol is None:
+        until_eol = spec_of(d).knee_until_eol
     if until_eol:
         keep = x <= eol_cycle(d)
         x, y = x[keep], y[keep]

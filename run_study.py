@@ -27,6 +27,7 @@ OUT = ROOT / "reports" / "severson_b2"   # set from --data in main()
 FIG = OUT / "figs"
 plt.style.use(str(ROOT / "journal.mplstyle"))
 mm = 1 / 25.4
+MIN_CELLS = 8  # fewer cells than this: the 5-nearest analogs are nearly all the other cells
 BLUE, VERM, GREEN, ORANGE, PINK, SKY, GREY = "#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#6b6b6b"
 LABEL = {"mean": "average of other cells", "condition_mean": "average of same-condition cells", "protocol_regression": "regression on protocol",
          "early_regression": "regression on early-cycle features", "analogs_features": "analogs: early-cycle features",
@@ -179,10 +180,18 @@ def main():
     knees.to_csv(OUT / "knees.csv")
     print(f"{int(knees['reached_eol'].sum())} of {len(knees)} cells reached end of life")
     fig_knees(cells)
+    all_cells = cells  # end-of-life test: every cell that reached end of life
+    if spec.no_knee_cells:
+        cells = {k: d for k, d in cells.items() if k not in spec.no_knee_cells}
+        print(f"knee tests on {len(cells)} cells; without a clear knee (end-of-life test only): "
+              f"{sorted(spec.no_knee_cells)}")
 
     summaries, details, P100 = {}, {}, None
     for n in spec.early_cycles:
         T, C = ev.cell_table(cells, n)
+        if len(T) < MIN_CELLS:
+            raise SystemExit(f"knee from first {n} cycles: only {len(T)} cells have early-cycle features "
+                             f"(need {MIN_CELLS}); too few for leave-one-cell-out. Change early_cycles or the data.")
         P = ev.loco_knee(T, C)
         summaries[n] = ev.summarize(P)
         details[n] = ev.summarize_detail(P)
@@ -203,7 +212,12 @@ def main():
           if "analogs_minus_condition_mean" in details[n].attrs}
     if cm:
         pd.DataFrame(cm).T.rename_axis("first_n_cycles").to_csv(OUT / "testA_analogs_minus_condition_mean_ci.csv")
-    T, C = ev.cell_table(cells, spec.main_n)
+    T, C = ev.cell_table(all_cells, spec.main_n)
+    reached = np.array([reached_eol(all_cells[k]) for k in T.index])
+    if (~reached).any():
+        print(f"end-of-life test: {(~reached).sum()} cells never reached end of life (censored), left out:",
+              list(T.index[~reached]))
+    T, C = T[reached], C[reached]
     pe = ev.summarize(ev.loco_knee(T, C, target="eol"))
     pe.to_csv(OUT / f"testA_eol_first{spec.main_n}_summary.csv")
     print(f"\nend of life from first {spec.main_n} cycles\n" + pe.round(1).to_string())

@@ -50,20 +50,24 @@ def main():
     spec = DatasetSpec.from_folder(str(data))
     out = ROOT / "reports" / data.resolve().name
     (out / "figs").mkdir(parents=True, exist_ok=True)
-    cells = load_cells(str(data), spec=dataclasses.replace(spec, exclude_cells={}))
+    cells = load_cells(str(data), spec=dataclasses.replace(spec, exclude_cells={}, no_knee_cells={}))
     rows = []
     for k, d in cells.items():
         kn, s1, s2 = knee_point(d)
         eol = eol_cycle(d)
         ka = knee_point(ageing_view(d))[0]
         ratio = s2 / s1 if s1 else np.nan
-        clear = bool(ratio >= MIN_RATIO and MIN_FRAC <= kn / eol <= MAX_FRAC)
-        reason = "" if clear else (f"fade after/before breakpoint {ratio:.2f} < {MIN_RATIO}" if not ratio >= MIN_RATIO
-                                   else f"breakpoint at {kn / eol:.2f} of end of life")
+        # the knee must sit inside the span it was fitted on: up to end of life, or the whole test
+        span = eol if spec.knee_until_eol else float(target_frame(d)["cycle"].iloc[-1])
+        clear = bool(ratio >= MIN_RATIO and MIN_FRAC <= kn / span <= MAX_FRAC)
+        reason = "" if clear else ("no breakpoint with accelerating fade" if not np.isfinite(kn) else
+                                   f"fade after/before breakpoint {ratio:.2f} < {MIN_RATIO}" if not ratio >= MIN_RATIO
+                                   else f"breakpoint at {kn / span:.2f} of the fitted span")
         rows.append({"cell": k, "condition": d.attrs.get("condition", ""), "knee": kn, "knee_ageing_cycles": ka,
-                     "eol": eol, "reached_eol": reached_eol(d), "knee_over_eol": kn / eol,
+                     "eol": eol, "reached_eol": reached_eol(d), "knee_over_span": kn / span,
                      "slope_before_mAh": s1, "slope_after_mAh": s2, "slope_ratio": ratio, "clear_knee": clear,
-                     "reason": reason, "excluded": k in spec.exclude_cells, "last_cycle": d["cycle"].iloc[-1]})
+                     "reason": reason, "excluded": k in spec.exclude_cells or k in spec.no_knee_cells,
+                     "last_cycle": d["cycle"].iloc[-1]})
     R = pd.DataFrame(rows).set_index("cell")
     R.to_csv(out / "knee_check.csv")
     pd.set_option("display.width", 220)
@@ -81,13 +85,14 @@ def main():
         q0, qt0 = d.attrs["q_initial"], t.attrs["q_initial"]
         ax.plot(d["cycle"], d["QDs"] / q0, color="#c8c8c8", lw=0.6)
         ax.plot(t["cycle"], t["QDs"] / qt0, color="#009E73", lw=0.7, marker="o", ms=0.7)
-        ax.axvline(r["knee"], color="#D55E00" if r["clear_knee"] else "#6b6b6b", lw=0.9)
+        if np.isfinite(r["knee"]):
+            ax.axvline(r["knee"], color="#D55E00" if r["clear_knee"] else "#6b6b6b", lw=0.9)
         ax.axvline(r["eol"], color="#6b6b6b", lw=0.6, ls="--")
         ax.axhline(spec.eol_fraction, color="#6b6b6b", lw=0.4, ls=":")
-        ax.set_title(f"{k} {r['condition']} knee {r['knee']:.0f}" + ("" if r["clear_knee"] else " UNCLEAR"),
+        ax.set_title(f"{k} {str(r['condition'])[:18]} knee {r['knee']:.0f}" + ("" if r["clear_knee"] else " UNCLEAR"),
                      fontsize=5.5, pad=1, color="black" if r["clear_knee"] else "#D55E00")
         ax.tick_params(labelsize=4.5)
-        ax.set_ylim(0.6, 1.02)
+        ax.set_ylim(min(0.6, float((t["QDs"] / qt0).min()) - 0.02), 1.02)
         ax.spines[["top", "right"]].set_visible(False)
     for ax in axes.ravel()[len(order):]:
         ax.axis("off")
