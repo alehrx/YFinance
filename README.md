@@ -53,6 +53,9 @@ In short:
     comes from chemistry and mechanism knowledge, not the analogs: without analogs it scores 1.62.
     Averaging the three tied methods (1.46) does about as well. It is wrong on cells that keep
     decelerating, and the data are public, so it may have seen them.
+  - **Small model:** the same prompts on Claude Haiku 5.5 ($0.78 vs $20) give 1.71: the same pattern
+    and about half the gain. It is clearly better than the trend only in the near term (1.00 vs 1.40 up
+    to 1.5 t90).
   See [docs/results_zero_shot.md](docs/results_zero_shot.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the

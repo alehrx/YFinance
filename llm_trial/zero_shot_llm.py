@@ -42,6 +42,10 @@ from knee_analogs import zero_shot as z  # noqa: E402
 MODEL = "claude-opus-5-5"
 EFFORT = "medium"
 PRICE_IN, PRICE_OUT = 4.0, 20.0  # $ per million tokens (Claude Opus 5.5)
+# --model: name -> (model id, $ per M input, $ per M output, output prefix). Opus keeps its original paths.
+MODELS = {"opus": ("claude-opus-5-5", 4.0, 20.0, "llm"),
+          "haiku": ("claude-haiku-5-5", 0.10, 0.50, "haiku")}  # Haiku 5.5 rate for prompts <= 100K tokens
+PREFIX = "llm"
 U_GRID = [1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 PER_PROMPT = 10
 WORK = ROOT / "data" / "library" / "llm"
@@ -185,7 +189,7 @@ def complete(rec) -> bool:
 def run(cond, prompts, pilot=False, workers=4):
     import anthropic
 
-    d = WORK / cond
+    d = WORK / cond if PREFIX == "llm" else WORK / PREFIX / cond
     d.mkdir(parents=True, exist_ok=True)
     for f in d.glob("*.json"):  # answers cached before the completeness check
         rec = json.loads(f.read_text(encoding="utf-8"))
@@ -229,7 +233,7 @@ def collect(cond, prompts, Q):
     """Forecast table in the Chronos format: id, efc, q10, q50, q90 (plus u = 1 at 90 %)."""
     rows, reasons, bad = [], [], 0
     for p in prompts:
-        f = WORK / cond / f"{p['key']}.json"
+        f = (WORK / cond if PREFIX == "llm" else WORK / PREFIX / cond) / f"{p['key']}.json"
         if not f.exists():
             continue
         rec = json.loads(f.read_text(encoding="utf-8"))
@@ -255,7 +259,11 @@ def main():
     ap.add_argument("--conditions", nargs="+", default=["A", "B", "C"])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--pilot", action="store_true")
+    ap.add_argument("--model", choices=list(MODELS), default="opus")
     args = ap.parse_args()
+    global MODEL, PRICE_IN, PRICE_OUT, PREFIX
+    MODEL, PRICE_IN, PRICE_OUT, PREFIX = MODELS[args.model]
+    print(f"model {MODEL}", flush=True)
     total_in = 0
     for cond in args.conditions:
         prompts, Q = build_prompts(cond)
@@ -271,12 +279,12 @@ def main():
         run(cond, prompts, pilot=args.pilot)
         fc, rs = collect(cond, prompts, Q)
         if len(fc):
-            fc.to_csv(WORK / f"llm_{cond}.csv", index=False)
-            rs.to_csv(WORK / f"llm_{cond}_reasons.csv", index=False)
+            fc.to_csv(WORK / f"{PREFIX}_{cond}.csv", index=False)
+            rs.to_csv(WORK / f"{PREFIX}_{cond}_reasons.csv", index=False)
             print(f"  {cond}: forecasts for {fc['id'].nunique()} cells")
     if args.dry_run:
         print(f"total ~{total_in / 1e3:.0f}k input tokens; output (incl. thinking) is the larger cost: "
-              f"~3-8k tokens per call x $20/M")
+              f"~3-8k tokens per call x ${PRICE_OUT:g}/M")
 
 
 if __name__ == "__main__":

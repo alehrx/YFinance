@@ -204,6 +204,45 @@ Pre-registered comparisons (difference in error, bootstrap 95 % CI, cells resamp
    These three methods err in different directions (e.g. on Severson, Chronos-2 forecasts too low and the
    linear trend too high).
 
+### 3b. The same prompts on a small, cheap model (Claude Haiku 5.5)
+
+`python llm_trial/zero_shot_llm.py --model haiku`: identical prompts, settings and scoring. One condition-C
+answer covered only Q1 and was re-asked. **Cost: $0.78**, against $20.2 for Opus 5.5 (about 0.1 cent per
+cell). Comparisons fixed before the Haiku results were seen.
+
+| | Opus 5.5 | Haiku 5.5 | best non-LLM (linear trend) |
+|---|---|---|---|
+| A: curve + analogs | 1.75 | 2.00 | 1.99 |
+| B: + chemistry, conditions, mechanisms | **1.51** | **1.71** | |
+| C: B without analogs | 1.62 | 1.81 | |
+| B, first 1-1.5 t90 | 0.83 | 1.00 | 1.40 |
+| B band covers actual | 75 % | 66 % | - |
+
+Per dataset, condition B (SOH points): LSD 1.47 (Opus 1.13), Mohtat 1.18 (1.45), Severson 1.51 (1.14),
+Stanford EV 3.61 (3.21), Stanford matrix 1.31 (1.14), Tongji 1.20 (0.97).
+
+| comparison | difference | 95 % CI |
+|---|---|---|
+| Haiku B − Opus B | +0.22 | [+0.08, +0.35] |
+| Haiku C − Opus C | +0.26 | [+0.12, +0.41] |
+| Haiku A − library analogs | +0.06 | [−0.03, +0.14] |
+| Haiku B − Haiku A | −0.26 | [−0.41, −0.11] |
+| Haiku B − Haiku C | −0.12 | [−0.29, +0.05] |
+| Haiku B − own linear trend | −0.11 | [−0.31, +0.10] |
+| Haiku C − own linear trend | −0.00 | [−0.21, +0.20] |
+
+- **The same pattern, about half the gain.** Chemistry and mechanism context helps Haiku as it helps Opus
+  (−0.26). The analogs again add little. Haiku B gets 0.28 of the 0.48 points Opus B gains over the
+  linear trend.
+- **Overall, Haiku is not clearly better than the linear trend** (CI includes 0). It is clearly better
+  in the near term (1.00 vs 1.40 up to 1.5 t90), and on LSD (1.47 vs 2.09) and Mohtat.
+- **Given only numbers and analogs (A), Haiku adds nothing** over the analogs' weighted mean. Opus did
+  (−0.19).
+- **The bigger model's edge is largest on Severson (LFP) and LSD.** That fits "more knowledge"
+  but also "more memorised literature": a smaller model is less likely to have memorised a specific
+  paper. Haiku keeping half the gain suggests that at least part of it is general chemistry knowledge,
+  not recall.
+
 **Caveats**
 - **Memorisation cannot be ruled out.** Severson, the Stanford sets, Tongji and Mohtat are public and
   widely analysed. The prompts never name a dataset, but chemistry plus conditions (e.g. LFP 1.1 Ah with
@@ -225,6 +264,8 @@ Pre-registered comparisons (difference in error, bootstrap 95 % CI, cells resamp
 Files:
 - `reports/library/universality_*.csv`, `zero_shot_overall.csv`, `zero_shot_by_dataset.csv`,
   `zero_shot_ci.csv`;
-- `reports/library/figs/universality.png`, `zero_shot_examples.png`.
+- `reports/library/figs/universality.png`, `zero_shot_examples.png`;
+- `reports/library/figs/zero_shot_llm_examples.png` (one typical cell per dataset) and
+  `zero_shot_llm_errors.png` (error by method and horizon), from `scripts/fig_zero_shot_llm.py`.
 
 The per-point forecasts and Chronos outputs stay in `data/library/` (not committed).

@@ -102,13 +102,16 @@ def main():
     Q = Q[(Q["n_seen"] >= 4) & (Q["n_future"] >= 1)]
     print(f"{len(Q)} query cells:", Q.groupby("dataset").size().to_dict(), flush=True)
     chron = run_chronos(Q, curves)
-    for cond in ("A", "B", "C"):  # LLM forecasts (llm_trial/zero_shot_llm.py), if present
-        f = WORK / "llm" / f"llm_{cond}.csv"
-        if f.exists():
-            chron[f"llm_{cond}"] = pd.read_csv(f).set_index(["id"])
-            if f"llm_{cond}" not in METHODS:
-                METHODS.append(f"llm_{cond}")
-                STYLE[f"llm_{cond}"] = ({"A": "#332288", "B": "#882255", "C": "#117733"}[cond], "-")
+    for prefix in ("llm", "haiku"):  # LLM forecasts (llm_trial/zero_shot_llm.py): Opus 5.5, Haiku 5.5
+        for cond in ("A", "B", "C"):
+            f = WORK / "llm" / f"{prefix}_{cond}.csv"
+            name = f"{prefix}_{cond}"
+            if f.exists():
+                chron[name] = pd.read_csv(f).set_index(["id"])
+                if name not in METHODS:
+                    METHODS.append(name)
+                    STYLE[name] = ({"A": "#332288", "B": "#882255", "C": "#117733"}[cond],
+                                   "-" if prefix == "llm" else ":")
     F = z.forecast(meta, curves, chron)
     # combination rule, fixed before the LLM results were seen: equal-weight mean of the medians of the
     # three zero-shot methods that tied (lib_shape, chronos2, own_linear), and the same plus llm_B
@@ -146,7 +149,11 @@ def main():
                  ("llm_B", "llm_A"),       # does chemistry, conditions and mechanism knowledge help?
                  ("llm_B", "llm_C"),       # do the analogs help, given that knowledge?
                  ("llm_B", "own_linear"), ("llm_B", "chronos2"), ("llm_C", "own_linear"),
-                 ("ensemble_llm", "ensemble"), ("ensemble", "own_linear")]
+                 ("ensemble_llm", "ensemble"), ("ensemble", "own_linear"),
+                 # Haiku 5.5, fixed before its results were seen: does a small model keep the gain?
+                 ("haiku_B", "llm_B"), ("haiku_C", "llm_C"),
+                 ("haiku_A", "lib_shape"), ("haiku_B", "haiku_A"), ("haiku_B", "haiku_C"),
+                 ("haiku_B", "own_linear"), ("haiku_C", "own_linear")]
     for a_, b_ in llm_pairs:
         if a_ in F and b_ in F:
             r = stratified_ci(F, a_, b_)
