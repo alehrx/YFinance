@@ -1,0 +1,15 @@
+level,method,lsd1,mohtat,stanford_matrix,tongji_nca,tongji_ncm
+0.98,early_accel,1.93,1.27,2.19,1.43,1.3
+0.98,early_library,1.67,1.17,1.54,1.22,1.33
+0.98,speed_regression,1.44,2.0,5.26,2.27,2.26
+0.98,slope_accel,1.61,1.22,1.91,1.31,1.31
+0.98,slope_library,1.47,1.29,1.32,1.2,1.52
+0.98,early_accel+llm,1.45,1.33,1.88,2.02,1.66
+0.98,slope_accel+llm,1.36,1.25,1.72,1.85,1.67
+0.95,early_accel,1.22,1.08,1.48,1.52,1.27
+0.95,early_library,1.13,1.16,1.2,1.24,1.21
+0.95,speed_regression,1.44,2.0,5.26,2.27,2.26
+0.95,slope_accel,1.1,1.08,1.14,1.27,1.28
+0.95,slope_library,1.12,1.15,1.15,1.13,1.11
+0.95,early_accel+llm,1.26,1.26,1.5,2.02,1.64
+0.95,slope_accel+llm,1.15,1.3,1.32,2.03,1.65

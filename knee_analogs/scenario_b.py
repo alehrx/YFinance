@@ -203,6 +203,12 @@ def score(P: pd.DataFrame, methods: list[str]) -> tuple[pd.DataFrame, pd.Series]
 # * ``early_library``: the same ratio from every library cell of the *other* datasets (no test of the type).
 # * ``early_accel+llm``: geometric mean of the early_accel t90 and the median-of-4-runs Opus (data) t90.
 # * ``early_linear``: the use cell's own straight-line trend over (t_LEVEL / 2, t_LEVEL], no shape.
+# Added before the second run (stop at 95 % and slope scaling), fixed before it was seen:
+# * ``slope_accel``: t90 = t_LEVEL + R x (t_LEVEL - t_{LEVEL+1 %}) of the use cell, R = median over the
+#   accelerated cells of (t90 - t_LEVEL) / (t_LEVEL - t_{LEVEL+1 %}): the remaining time to 90 % scaled by
+#   the fade rate at the end of the short test, which skips the break-in.
+# * ``slope_library``: R from the library cells of the other datasets.
+# * ``slope_accel+llm``: geometric mean of the slope_accel t90 and Opus's t90 (data, median of runs).
 # Compared with speed_regression, the Opus (data, median of runs) curve, oracle_speed and use_database
 # on the same points.
 
@@ -216,6 +222,12 @@ def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.
     for ds in lib_T["dataset"].unique():  # library ratio t90 / t_level per held-out dataset
         r = [z.t_at(*curves[c]) / z.t_at(*curves[c], level=level) for c in lib_T.index[lib_T["dataset"] != ds]]
         lib_ratio[ds] = float(np.nanmedian(r))
+    up = round(level + 0.01, 4)
+    def slope_ratio(t, s):
+        tl, tu, t90_ = z.t_at(t, s, level=level), z.t_at(t, s, level=up), z.t_at(t, s)
+        return (t90_ - tl) / (tl - tu) if tl > tu else np.nan
+    lib_slope = {ds: float(np.nanmedian([slope_ratio(*curves[c]) for c in lib_T.index[lib_T["dataset"] != ds]]))
+                 for ds in lib_T["dataset"].unique()}
     rows = []
     for typ, D in M.groupby("type"):
         acc = [c for c in D.index[D["role"] == "accelerated"] if np.isfinite(z.t_at(*curves[c]))]
@@ -223,6 +235,7 @@ def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.
         sh = shape(meta, curves, acc, lib_Q, lib_T)
         ratio_acc = float(np.nanmedian([seen_curve(curves, c)[2] / z.t_at(*seen_curve(curves, c)[:2], level=level)
                                         for c in acc]))
+        slope_acc = float(np.nanmedian([slope_ratio(*seen_curve(curves, c)[:2]) for c in acc]))
         y = np.log([z.t_at(*curves[c]) for c in acc])
         t90_reg = dict(zip(use, np.exp(speed_regression(F.loc[acc], y, F.loc[use]))))
         for c in use:
@@ -240,9 +253,15 @@ def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.
             tx_seen = z.t_at(ts, ss, level=level)
             pred = {"early_accel": tx_seen * ratio_acc, "early_library": tx_seen * lib_ratio[meta.loc[c, "dataset"]],
                     "speed_regression": t90_reg[c]}
+            tu_seen = z.t_at(ts, ss, level=up)
+            if tx_seen > tu_seen:
+                pred["slope_accel"] = tx_seen + slope_acc * (tx_seen - tu_seen)
+                pred["slope_library"] = tx_seen + lib_slope[meta.loc[c, "dataset"]] * (tx_seen - tu_seen)
             key = cond_key(M.loc[c])
             if llm_t90 and (typ, key) in llm_t90:
                 pred["early_accel+llm"] = float(np.sqrt(pred["early_accel"] * llm_t90[(typ, key)]))
+                if "slope_accel" in pred:
+                    pred["slope_accel+llm"] = float(np.sqrt(pred["slope_accel"] * llm_t90[(typ, key)]))
             out = {k: curve_from_shape(sh, v, tt) for k, v in pred.items()}
             m = (ts > tx_seen / 2) & (ts <= t_stop)
             slope = np.polyfit(ts[m], ss[m], 1)[0] if m.sum() >= 2 else (ss[-1] - 1.0) / ts[-1]

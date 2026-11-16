@@ -64,8 +64,9 @@ In short:
   4.35, against 2.35 for a use-condition database. Single LLM runs vary a lot; the gain from showing it
   the test data is within that noise.
   Adding a short test of the use cell itself (to 98 % SOH, 11-23 % of the time to 90 %) brings the
-  error to 4.6-5.0, but the start of life is not a scaled copy of the rest of the curve, so it does
-  not reach the database. See [docs/results_scenario_b.md](docs/results_scenario_b.md).
+  error to 4.6-5.0. The start of life is not a scaled copy of the rest of the curve; scaling by the fade
+  rate at the end of the short test (after the break-in) gives 3.9. A test to 95 % (half the time to
+  90 %) gives 2.7, as good as a use-condition database, but then a straight line does as well. See [docs/results_scenario_b.md](docs/results_scenario_b.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
   analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
@@ -131,7 +132,7 @@ scripts/                data download helpers, dataset adapters (convert_lsd.py,
                         knee review (check_knees.py), voltage-feature comparison, trajectory_study.py,
                         build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py,
                         fig_zero_shot_llm.py, scenario_b_study.py, scenario_b_repeats.py,
-                        scenario_b_early.py
+                        scenario_b_early.py, scenario_b_early2.py
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching

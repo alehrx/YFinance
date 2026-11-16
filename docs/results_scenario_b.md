@@ -233,6 +233,65 @@ So scaling the early test by the accelerated cells' ratio is off by up to a fact
   - scale by the late slope of the short test instead of the time to 98 %;
   - use voltage-based degradation modes to separate break-in from steady fade.
 
+### Second round: a later stop and slope scaling (`scripts/scenario_b_early2.py`)
+
+Both were fixed before this run. The ideas came from the first round.
+- **Slope scaling** (slope_accel, slope_library): t90 = the use cell's time to 98 % + the time from 98 %
+  to 90 %. That second part is estimated from the fade rate between 99 and 98 % (the end of the short
+  test, after the break-in), times the reference cells' median ratio of the two.
+- **A later stop at 95 %** with every method, the slope window then being 96 → 95 %.
+
+Error (SOH points; mean over types, common points):
+
+| method | stop at 98 % (median 19 % of t90) | stop at 95 % (median 48 % of t90) |
+|---|---|---|
+| oracle_speed (true t90; reference) | 1.78 | 1.83 |
+| use_database (reference) | 2.77 | 3.18 |
+| slope_library | **3.89** | 2.78 |
+| slope_accel | 4.53 | **2.67** |
+| slope_accel+llm | 4.51 | 3.94 |
+| early_library | 4.62 | 3.20 |
+| early_linear (own straight line) | 5.01 | **2.64** |
+| early_accel | 5.84 | 3.75 |
+
+Comparisons (95 % CI):
+
+| comparison | stop at 98 % | stop at 95 % |
+|---|---|---|
+| slope_accel − early_accel | −1.33 [−1.78, −0.95] | −1.10 [−1.30, −0.92] |
+| slope_library − early_library | −0.82 [−1.46, −0.29] | −0.42 [−0.66, −0.23] |
+| slope_accel − slope_library | +0.71 [+0.30, +1.12] | −0.07 [−0.26, +0.11] |
+| slope_accel − early_linear | −0.61 [−1.85, +0.60] | −0.00 [−0.74, +0.63] |
+| slope_accel+llm − slope_accel | +0.00 [−0.41, +0.38] | +1.32 [+0.90, +1.72] |
+| slope_accel − use_database | +1.76 [+1.30, +2.20] | −0.51 [−0.87, −0.17] |
+
+Predicted t90 vs true (median factor) at 98 %: slope_library 1.2-1.5, slope_accel 1.2-1.9; at 95 %:
+both 1.1-1.3.
+
+**What this says**
+- **Scaling by the late slope works better than scaling by time,** at both stops (−1.3 and −1.1). It
+  skips the break-in, which is what broke the first rule. This supports the hypothesis in a
+  narrower form: after the break-in, the fade does scale between conditions.
+- **With a test to 98 % (about a fifth of the time to 90 %), the best is 3.9 SOH points** (slope scaled
+  by the library). The type's own accelerated cells do slightly worse than the library here (+0.71).
+  That is still 1.1 points short of a use-condition database.
+- **With a test to 95 %, the cell's own data dominate.** At about half the time to 90 %, slope scaling
+  (2.67) and the plain straight line (2.64) both beat a use-condition database (3.18 on these points,
+  which are later in life). The accelerated tests and the library add nothing measurable over the
+  straight line.
+- **The LLM no longer helps once the cell's own slope is known.** It is neutral at 98 % and worse at 95 %.
+- **The practical trade-off is error vs test time:**
+
+  | information | test time, as a share of t90 at use | error |
+  |---|---|---|
+  | accelerated tests only, LLM speed + data shape | ~0 | ~4.4 |
+  | + short use test to 98 % (slope scaling) | ~0.2 | ~3.9 |
+  | + use test to 95 % | ~0.5 | ~2.7 |
+  | full use-condition database (other cells) | long | 2.8-3.2 |
+
+  The no-test row is measured on all points from the start of life, the others only after their stop,
+  so the rows are not strictly comparable.
+
 **Caveats:** cells resampled within only 5 types; Mohtat has no real short test; the first two methods
 cannot be told apart statistically from the straight line.
 
@@ -247,7 +306,8 @@ cannot be told apart statistically from the straight line.
 Files:
 - `reports/library/scenario_b_by_type.csv`, `scenario_b_overall.csv`, `scenario_b_t90.csv`,
   `scenario_b_ci.csv`, `scenario_b_repeats.csv`, `scenario_b_repeats_t90.csv`, `scenario_b_repeats_ci.csv`;
-- `reports/library/scenario_b_early.csv`, `scenario_b_early_ci.csv`, `scenario_b_early_t90.csv`;
+- `reports/library/scenario_b_early.csv`, `scenario_b_early_ci.csv`, `scenario_b_early_t90.csv`,
+  `scenario_b_early2.csv`, `scenario_b_early2_ci.csv`, `scenario_b_early2_t90.csv`;
 - `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`.
 
 Prompts and answers stay in `data/library/llm/scenario_b/` (not committed).

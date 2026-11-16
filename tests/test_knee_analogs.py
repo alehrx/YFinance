@@ -349,5 +349,14 @@ def test_scenario_b_early_never_sees_the_use_cell_after_its_short_test():
     a = P[P["id"] == q].set_index("efc")
     c2 = P2[P2["id"] == q].set_index("efc")
     common = a.index.intersection(c2.index)
-    for m in ("early_accel", "early_library", "early_linear", "speed_regression"):
+    for m in ("early_accel", "early_library", "early_linear", "speed_regression", "slope_accel", "slope_library"):
         assert np.allclose(a.loc[common, m], c2.loc[common, m]), m
+    P95 = b.forecast_early(meta, curves, level=0.95)  # also for a later stop
+    _, t_stop95 = z.t_at(t, s, level=0.95, with_stop=True)
+    curves3 = dict(curves)
+    curves3[q] = (t, np.where(t > t_stop95, s - 0.02, s))
+    P3 = b.forecast_early(meta, curves3, level=0.95)
+    a, c3 = P95[P95["id"] == q].set_index("efc"), P3[P3["id"] == q].set_index("efc")
+    common = a.index.intersection(c3.index)
+    for m in ("early_accel", "slope_accel", "slope_library"):
+        assert np.allclose(a.loc[common, m], c3.loc[common, m]), m
