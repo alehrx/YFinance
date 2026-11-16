@@ -57,6 +57,11 @@ In short:
     and about half the gain. It is clearly better than the trend only in the near term (1.00 vs 1.40 up
     to 1.5 t90).
   See [docs/results_zero_shot.md](docs/results_zero_shot.md).
+- **Accelerated tests → use conditions** (Scenario B, 5 cell types): seeing only harsh-condition cells
+  down to 90 % SOH, the shape transfers (1.6 SOH points given the true speed), but the speed does not:
+  fitting it against conditions errs by 10.6 points. An LLM judging the speed-up from chemistry and
+  mechanisms halves that (about 5). Its speed with the data's shape gives 3.9, against 2.35 for a
+  use-condition database. See [docs/results_scenario_b.md](docs/results_scenario_b.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
   analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
@@ -115,11 +120,13 @@ knee_analogs/
   voltage_features.py   ΔQ(V), dQ/dV and DVA features from adapter-written curves
   trajectory.py         whole-future capacity-curve forecasts (analogs and baselines)
   zero_shot.py          cross-dataset forecasts from a cell's curve down to 90 % SOH
+  scenario_b.py         accelerated tests to 90 % SOH -> curves at untested use conditions
 run_study.py            runs everything for one dataset folder, writes reports/<dataset>/
-llm_trial/              blinded LLM trials: knee prompts (Severson), zero-shot forecasts (zero_shot_llm.py)
+llm_trial/              blinded LLM trials: knee prompts (Severson), zero_shot_llm.py, scenario_b_llm.py
 scripts/                data download helpers, dataset adapters (convert_lsd.py, convert_mohtat.py),
                         knee review (check_knees.py), voltage-feature comparison, trajectory_study.py,
-                        build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py
+                        build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py,
+                        fig_zero_shot_llm.py, scenario_b_study.py
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching

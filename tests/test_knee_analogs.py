@@ -272,3 +272,47 @@ def test_zero_shot_memory_never_contains_the_query_dataset(monkeypatch):
     a, b = F[F["id"] == q].reset_index(drop=True), F2[F2["id"] == q].reset_index(drop=True)
     for m in ("lib_shape", "lib_shape_cond", "lib_median", "own_linear", "own_powerlaw", "within_shape"):
         assert np.allclose(a[m], b[m], equal_nan=True), m
+
+
+def test_scenario_b_never_sees_use_cells_or_accelerated_futures():
+    """Scenario B forecasts of a use cell do not change when that cell's data, or the accelerated cells'
+    data after they reached 90 %, change."""
+    from knee_analogs import scenario_b as b
+    from knee_analogs import zero_shot as z
+
+    rng = np.random.default_rng(1)
+    meta, curves = [], {}
+
+    def add(cid, ds, T, rate, cond="D1_x"):
+        t = np.arange(0, 600, 5.0)
+        curves[cid] = (t, 1 - rate * t - 3e-6 * np.maximum(0, t - 150) ** 2)
+        meta.append({"id": cid, "dataset": ds, "T": T, "chg_C": 0.5, "dis_C": 1.0, "vmax": 4.2, "vmin": 2.65,
+                     "dod": 1.0, "condition": cond})
+
+    for i in range(6):
+        add(f"tongji__acc{i}", "tongji", 45.0, 0.0006 * (1 + 0.2 * rng.random()))
+        add(f"tongji__use{i}", "tongji", 25.0, 0.0003 * (1 + 0.2 * rng.random()))
+    for ds in ("x", "y"):  # library datasets for the post-90 % shape
+        for i in range(12):
+            add(f"{ds}__{i}", ds, 25.0, 0.0004 * (1 + 0.3 * rng.random()), cond="other")
+    meta = pd.DataFrame(meta).set_index("id")
+    zs = ["accel_as_is", "speed_regression"]
+    P, _ = b.forecast(meta, curves)
+    assert set(P["id"]) == {f"tongji__use{i}" for i in range(6)}
+    curves2 = dict(curves)
+    q = "tongji__use2"
+    t, s = curves[q]
+    curves2[q] = (t, s - 0.03)  # the use cell itself
+    for i in range(6):  # accelerated cells after their test stopped
+        c = f"tongji__acc{i}"
+        t, s = curves[c]
+        _, t_stop = z.t_at(t, s, with_stop=True)
+        curves2[c] = (t, np.where(t > t_stop, s - 0.1, s))
+    P2, _ = b.forecast(meta, curves2)
+    for cid in ("tongji__use0", q):
+        a = P[P["id"] == cid].reset_index(drop=True)
+        c2 = P2[P2["id"] == cid].reset_index(drop=True)
+        a = a[a["efc"].isin(c2["efc"])].reset_index(drop=True)
+        c2 = c2[c2["efc"].isin(a["efc"])].reset_index(drop=True)
+        for m in zs:
+            assert np.allclose(a[m], c2[m]), (cid, m)

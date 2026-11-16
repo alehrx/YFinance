@@ -255,9 +255,8 @@ Stanford EV 3.61 (3.21), Stanford matrix 1.31 (1.14), Tongji 1.20 (0.97).
 
 ## Not yet done
 
-- **Scenario B, accelerated → use conditions.** Only accelerated cells of a type observed to 90 %;
-  forecast cells of the same type at milder conditions, without observing them. This is where the LLM's
-  use of conditions would matter most.
+- **Scenario B** (accelerated tests → use conditions) is now in
+  [results_scenario_b.md](results_scenario_b.md).
 - **A clean test on unpublished data** (Chronos and LLMs may have seen the public datasets), and repeats
   of the LLM run to measure its spread.
 

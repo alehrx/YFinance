@@ -1,0 +1,13 @@
+,MAE
+accel_as_is,11.427397589034369
+speed_regression,10.5974823575993
+haiku_data,5.05809930213875
+haiku_know,5.364862152827833
+opus_data,5.610152319921405
+opus_know,6.420768703713044
+haiku_data_speed+shape,5.5221759883767945
+haiku_know_speed+shape,5.834220684004704
+opus_data_speed+shape,3.869614520606329
+opus_know_speed+shape,5.006323031760482
+oracle_speed,1.6224222929454233
+use_database,2.34882865025866
