@@ -242,3 +242,33 @@ def test_trajectory_forecast_never_uses_the_query_or_its_future(tmp_path):
     assert not np.allclose(a["actual"], b["actual"])
     S = tj.score(F)
     assert (S["MAE_pct_points"] >= 0).all()
+
+
+def test_zero_shot_memory_never_contains_the_query_dataset(monkeypatch):
+    """Cross-dataset forecasts use only other datasets, and a cell's future after t90 never changes them."""
+    from knee_analogs import zero_shot as z
+
+    rng = np.random.default_rng(0)
+    meta, curves = [], {}
+    for ds in ("a", "b", "c"):
+        for i in range(12):
+            t = np.arange(0, 400, 5.0)
+            rate = 0.0003 * (1 + 0.3 * rng.random())
+            s = 1 - rate * t - 2e-6 * np.maximum(0, t - 200) ** 2
+            cid = f"{ds}__{i}"
+            curves[cid] = (t, s)
+            meta.append({"id": cid, "dataset": ds, "T": 25.0, "chg_C": 1.0, "dis_C": 1.0})
+    meta = pd.DataFrame(meta).set_index("id")
+    F = z.forecast(meta, curves)
+    for q, g in F.groupby("id"):
+        ds = q.split("__")[0]
+        assert all(n.split("__")[0] != ds for n in g["lib_analogs"].iloc[0].split(","))
+    q = "a__3"
+    t, s = curves[q]
+    t90, t_stop = z.t_at(t, s, with_stop=True)
+    curves2 = dict(curves)
+    curves2[q] = (t, np.where(t > t_stop, s - 0.05, s))  # change only what comes after the test stopped
+    F2 = z.forecast(meta, curves2)
+    a, b = F[F["id"] == q].reset_index(drop=True), F2[F2["id"] == q].reset_index(drop=True)
+    for m in ("lib_shape", "lib_shape_cond", "lib_median", "own_linear", "own_powerlaw", "within_shape"):
+        assert np.allclose(a[m], b[m], equal_nan=True), m

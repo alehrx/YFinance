@@ -41,6 +41,13 @@ In short:
   than extrapolating the cell's own trend, but no better than ridge regression or the same-protocol
   average. On Mohtat (21 cells, each under its own condition) the cell's own power-law trend is as good
   or better. See [docs/results_trajectory.md](docs/results_trajectory.md).
+- **Without an ageing database of the cell type** (766 cells, 6 datasets, LFP / NCA / NMC):
+  - **Speed carries most of the information:** the time to reach 90 % SOH explains 76 % of the variance
+    of the time to 80 %. The curve's shape after 90 % differs by chemistry.
+  - **Zero-shot forecast:** seeing a cell only down to 90 % SOH, analogs from *other* datasets,
+    Chronos-2 and even the cell's own straight-line trend all forecast the rest to ~1.95 SOH points,
+    against ~0.97 with a same-type database.
+  See [docs/results_zero_shot.md](docs/results_zero_shot.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
   analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
@@ -98,10 +105,12 @@ knee_analogs/
   inspect_datasets.py   read-only overview of a dataset folder
   voltage_features.py   ΔQ(V), dQ/dV and DVA features from adapter-written curves
   trajectory.py         whole-future capacity-curve forecasts (analogs and baselines)
+  zero_shot.py          cross-dataset forecasts from a cell's curve down to 90 % SOH
 run_study.py            runs everything for one dataset folder, writes reports/<dataset>/
 llm_trial/              blinded LLM trial: build prompts, score, plot
 scripts/                data download helpers, dataset adapters (convert_lsd.py, convert_mohtat.py),
-                        knee review (check_knees.py), voltage-feature comparison, trajectory_study.py
+                        knee review (check_knees.py), voltage-feature comparison, trajectory_study.py,
+                        build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching
