@@ -316,3 +316,38 @@ def test_scenario_b_never_sees_use_cells_or_accelerated_futures():
         c2 = c2[c2["efc"].isin(a["efc"])].reset_index(drop=True)
         for m in zs:
             assert np.allclose(a[m], c2[m]), (cid, m)
+
+
+def test_scenario_b_early_never_sees_the_use_cell_after_its_short_test():
+    """B+ forecasts use only the use cell's points up to its short-test stop."""
+    from knee_analogs import scenario_b as b
+    from knee_analogs import zero_shot as z
+
+    rng = np.random.default_rng(2)
+    meta, curves = [], {}
+
+    def add(cid, ds, T, rate, cond="D1_x"):
+        t = np.arange(0, 600, 5.0)
+        curves[cid] = (t, 1 - rate * t - 3e-6 * np.maximum(0, t - 150) ** 2)
+        meta.append({"id": cid, "dataset": ds, "T": T, "chg_C": 0.5, "dis_C": 1.0, "vmax": 4.2, "vmin": 2.65,
+                     "dod": 1.0, "condition": cond})
+
+    for i in range(6):
+        add(f"tongji__acc{i}", "tongji", 45.0, 0.0006 * (1 + 0.2 * rng.random()))
+        add(f"tongji__use{i}", "tongji", 25.0, 0.0003 * (1 + 0.2 * rng.random()))
+    for ds in ("x", "y"):
+        for i in range(12):
+            add(f"{ds}__{i}", ds, 25.0, 0.0004 * (1 + 0.3 * rng.random()), cond="other")
+    meta = pd.DataFrame(meta).set_index("id")
+    P = b.forecast_early(meta, curves)
+    q = "tongji__use1"
+    t, s = curves[q]
+    _, t_stop = z.t_at(t, s, level=0.98, with_stop=True)
+    curves2 = dict(curves)
+    curves2[q] = (t, np.where(t > t_stop, s - 0.02, s))
+    P2 = b.forecast_early(meta, curves2)
+    a = P[P["id"] == q].set_index("efc")
+    c2 = P2[P2["id"] == q].set_index("efc")
+    common = a.index.intersection(c2.index)
+    for m in ("early_accel", "early_library", "early_linear", "speed_regression"):
+        assert np.allclose(a.loc[common, m], c2.loc[common, m]), m

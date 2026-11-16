@@ -161,6 +161,81 @@ Median-of-runs comparisons (95 % CI):
   - Opus's speed with the shared shape is the best and most stable variant (4.35, sd 0.38). That
     combination is still post hoc.
 
+## Scenario B+: adding a short test at the use condition (`scripts/scenario_b_early.py`)
+
+**Idea.** Speed was the missing piece. So also test the use condition itself, briefly: until SOH
+first reaches 98 % (primary) or 99 %. That takes a median 11-23 % of the time to 90 % at 98 %, and
+5-15 % at 99 %. Mohtat is the exception: its first check-up already comes at 31 % of t90, so it has no
+real short test.
+
+**Fixed before the first run** (`knee_analogs/scenario_b.py`, `forecast_early`). The use cell is seen
+up to its first point at or below the stopping level, and only its later points are scored, up to
+3 × its true t90.
+- **early_accel:** t90 = the use cell's time to 98 % × the accelerated cells' median ratio t90 / t98.
+  This assumes the early fade is a scaled copy of the whole curve.
+- **early_library:** the same ratio, taken from every library cell of the other datasets.
+- **early_accel+llm:** the geometric mean of the early_accel t90 and Opus's t90 (data, median of 4 runs).
+- **early_linear:** the use cell's own straight-line trend.
+
+The curves use the shared shape, as before.
+
+Error (SOH points; mean over types, common points):
+
+| method | stop at 98 % | stop at 99 % |
+|---|---|---|
+| oracle_speed (true t90; reference) | 1.78 | 1.76 |
+| use_database (reference) | 2.77 | 2.68 |
+| early_library | **4.62** | 7.18 |
+| early_accel+llm | 5.00 | **5.49** |
+| early_linear | 5.01 | 6.60 |
+| early_accel | 5.84 | 8.13 |
+| Opus, data, median of runs (no short test) | 7.56 | 7.23 |
+| speed_regression (no short test) | 12.85 | 12.33 |
+
+The no-short-test rows differ from the main table because only later points are scored here.
+
+At 98 % (95 % CI):
+- early_accel − speed_regression: −7.01 [−8.40, −5.64];
+- early_accel − early_library: +1.23 [+0.78, +1.64];
+- early_accel − early_linear: +0.72 [−0.33, +1.79];
+- early_accel+llm − early_accel: −0.85 [−1.58, −0.22];
+- early_accel − use_database: +3.07 [+2.54, +3.63].
+
+**Why the short test helps less than expected.** The first 2 % of fade is not a scaled copy of the
+rest of the curve, and that differs between accelerated and use conditions. At use conditions the cells
+lose their first 2 % relatively quickly (break-in, early SEI growth) and then fade slowly. At
+accelerated conditions the main stress dominates from the start.
+
+Median t90 / t98 (and t90 / t95), true values:
+
+| type | accelerated | use |
+|---|---|---|
+| LSD | 4.8 (1.9) | 9.3 (2.3) |
+| Stanford matrix | 3.6 (1.7) | 8.0 (2.5) |
+| Mohtat | 6.9 (2.5) | 6.3 (2.4) |
+| Tongji NCA | 6.4 (2.8) | 4.4 (1.8) |
+| Tongji NCM | 9.4 (3.1) | 7.2 (2.4) |
+
+So scaling the early test by the accelerated cells' ratio is off by up to a factor of 2 (t90 factor 1.3-2.2).
+
+**What this says**
+- **A short use test cuts the error of the condition-only methods by more than half** (5-6 vs 12.9). It
+  also beats the LLM alone (early_accel − Opus: −1.76 [−2.67, −0.82]). But it does not reach the
+  database (+3 points).
+- **The accelerated tests do not tell how to scale the early fade.** The library's ratio
+  (early_library) does better than the type's own accelerated cells. A straight line through the
+  short test does as well. "Same curve, different speed" holds for the shape after 90 %, not for the
+  start of life.
+- **The LLM and the short test err differently.** Averaging their t90s helps (−0.85 at 98 %, −2.94 at
+  99 %), and the average is the most robust to a very short test.
+- **Ideas for next time, not tested here:**
+  - stop the short test later (t90 / t95 is closer between accelerated and use than t90 / t98);
+  - scale by the late slope of the short test instead of the time to 98 %;
+  - use voltage-based degradation modes to separate break-in from steady fade.
+
+**Caveats:** cells resampled within only 5 types; Mohtat has no real short test; the first two methods
+cannot be told apart statistically from the straight line.
+
 **Caveats**
 - **Four runs per model and condition** measure the spread, but not every source of variation: the
   prompt wording and the choice of a single prompt per type are fixed.
@@ -172,6 +247,7 @@ Median-of-runs comparisons (95 % CI):
 Files:
 - `reports/library/scenario_b_by_type.csv`, `scenario_b_overall.csv`, `scenario_b_t90.csv`,
   `scenario_b_ci.csv`, `scenario_b_repeats.csv`, `scenario_b_repeats_t90.csv`, `scenario_b_repeats_ci.csv`;
-- `reports/library/figs/scenario_b_examples.png`.
+- `reports/library/scenario_b_early.csv`, `scenario_b_early_ci.csv`, `scenario_b_early_t90.csv`;
+- `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`.
 
 Prompts and answers stay in `data/library/llm/scenario_b/` (not committed).

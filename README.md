@@ -62,7 +62,10 @@ In short:
   fitting it against conditions errs by 10.6 points. An LLM judging the speed-up from chemistry and
   mechanisms halves that (4.6-6.5 over 4 runs per model). The LLM's speed with the data's shape gives
   4.35, against 2.35 for a use-condition database. Single LLM runs vary a lot; the gain from showing it
-  the test data is within that noise. See [docs/results_scenario_b.md](docs/results_scenario_b.md).
+  the test data is within that noise.
+  Adding a short test of the use cell itself (to 98 % SOH, 11-23 % of the time to 90 %) brings the
+  error to 4.6-5.0, but the start of life is not a scaled copy of the rest of the curve, so it does
+  not reach the database. See [docs/results_scenario_b.md](docs/results_scenario_b.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
   analogs. Adding chemistry and mechanism context did not change the numbers. See the LLM section in
@@ -127,7 +130,8 @@ llm_trial/              blinded LLM trials: knee prompts (Severson), zero_shot_l
 scripts/                data download helpers, dataset adapters (convert_lsd.py, convert_mohtat.py),
                         knee review (check_knees.py), voltage-feature comparison, trajectory_study.py,
                         build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py,
-                        fig_zero_shot_llm.py, scenario_b_study.py, scenario_b_repeats.py
+                        fig_zero_shot_llm.py, scenario_b_study.py, scenario_b_repeats.py,
+                        scenario_b_early.py
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching

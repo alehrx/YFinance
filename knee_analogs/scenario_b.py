@@ -191,3 +191,69 @@ def score(P: pd.DataFrame, methods: list[str]) -> tuple[pd.DataFrame, pd.Series]
         per.append(r)
     T = pd.DataFrame(per).set_index("type")
     return T, T[methods].mean()
+
+
+# --- Scenario B+: accelerated tests to 90 % plus a short test of the use cell itself ----------------------
+# Fixed before the first run. The use cell is seen up to and including its first point at or below
+# LEVEL (0.98 primary, 0.99 secondary), as if a short test at the use condition stopped there. Scored:
+# its points after that, up to 3 x its true t90 (cells that reach 90 %).
+# Methods (t90 predictions; the curve is the shared shape with that t90, as above):
+# * ``early_accel``: t90 = t_LEVEL(use cell) x median over the accelerated cells of t90 / t_LEVEL
+#   (their early-to-90 % ratio is assumed to carry over).
+# * ``early_library``: the same ratio from every library cell of the *other* datasets (no test of the type).
+# * ``early_accel+llm``: geometric mean of the early_accel t90 and the median-of-4-runs Opus (data) t90.
+# * ``early_linear``: the use cell's own straight-line trend over (t_LEVEL / 2, t_LEVEL], no shape.
+# Compared with speed_regression, the Opus (data, median of runs) curve, oracle_speed and use_database
+# on the same points.
+
+
+def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.DataFrame:
+    M = assign_types(meta)
+    lib_Q = z.cell_table(meta, curves)
+    lib_T = lib_Q[lib_Q["n_future"] >= 1]
+    F = features(M)
+    lib_ratio = {}
+    for ds in lib_T["dataset"].unique():  # library ratio t90 / t_level per held-out dataset
+        r = [z.t_at(*curves[c]) / z.t_at(*curves[c], level=level) for c in lib_T.index[lib_T["dataset"] != ds]]
+        lib_ratio[ds] = float(np.nanmedian(r))
+    rows = []
+    for typ, D in M.groupby("type"):
+        acc = [c for c in D.index[D["role"] == "accelerated"] if np.isfinite(z.t_at(*curves[c]))]
+        use = list(D.index[D["role"] == "use"])
+        sh = shape(meta, curves, acc, lib_Q, lib_T)
+        ratio_acc = float(np.nanmedian([seen_curve(curves, c)[2] / z.t_at(*seen_curve(curves, c)[:2], level=level)
+                                        for c in acc]))
+        y = np.log([z.t_at(*curves[c]) for c in acc])
+        t90_reg = dict(zip(use, np.exp(speed_regression(F.loc[acc], y, F.loc[use]))))
+        for c in use:
+            t, s = curves[c]
+            t90 = z.t_at(t, s)
+            tx, t_stop = z.t_at(t, s, level=level, with_stop=True)
+            if not (np.isfinite(t90) and np.isfinite(tx)):
+                continue
+            sel = (t > t_stop) & (t <= 3 * t90)
+            if not sel.any():
+                continue
+            tt, actual = t[sel], s[sel]
+            seen = t <= t_stop  # everything below uses only these points of the use cell
+            ts, ss = t[seen], s[seen]
+            tx_seen = z.t_at(ts, ss, level=level)
+            pred = {"early_accel": tx_seen * ratio_acc, "early_library": tx_seen * lib_ratio[meta.loc[c, "dataset"]],
+                    "speed_regression": t90_reg[c]}
+            key = cond_key(M.loc[c])
+            if llm_t90 and (typ, key) in llm_t90:
+                pred["early_accel+llm"] = float(np.sqrt(pred["early_accel"] * llm_t90[(typ, key)]))
+            out = {k: curve_from_shape(sh, v, tt) for k, v in pred.items()}
+            m = (ts > tx_seen / 2) & (ts <= t_stop)
+            slope = np.polyfit(ts[m], ss[m], 1)[0] if m.sum() >= 2 else (ss[-1] - 1.0) / ts[-1]
+            out["early_linear"] = ss[-1] + slope * (tt - ts[-1])
+            out["oracle_speed"] = curve_from_shape(sh, t90, tt)
+            others = [o for o in use if o != c]
+            G = np.array([np.interp(tt, *curves[o], left=np.nan, right=np.nan) for o in others])
+            with np.errstate(all="ignore"):
+                out["use_database"] = np.where(np.isfinite(G).sum(0) >= 3, np.nanmean(G, 0), np.nan)
+            for j in range(len(tt)):
+                rows.append({"id": c, "type": typ, "key": key, "efc": tt[j], "actual": actual[j], "t90_true": t90,
+                             "t_stop": t_stop, **{f"t90_{k}": v for k, v in pred.items()},
+                             **{k: float(v[j]) for k, v in out.items()}})
+    return pd.DataFrame(rows)
