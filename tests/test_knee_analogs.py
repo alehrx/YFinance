@@ -216,3 +216,29 @@ def test_rank_corr_within_condition_ignores_differences_between_conditions():
                       "actual": [100, 110, 120, 130, 500, 510, 520, 530],
                       "m": [130, 120, 110, 100, 530, 520, 510, 500]})
     assert rank_corr_within_condition(P, "m") < -0.9
+
+
+def test_trajectory_forecast_never_uses_the_query_or_its_future(tmp_path):
+    """The query is never its own analog, and changing its data after N does not change any forecast."""
+    from knee_analogs import trajectory as tj
+
+    knees = [260, 280, 300, 320, 340, 360, 380, 400, 420, 440]
+    write_cells(tmp_path, knees)
+    cells = load_cells(str(tmp_path))
+    F = tj.forecast(cells, 150)
+    assert set(F["cell"]) == set(cells)
+    for cell, g in F.groupby("cell"):
+        assert cell not in g["analogs"].iloc[0].split(",")
+    # perturb one cell's future (after cycle 150) and check its own forecasts are unchanged
+    q = "cell3"
+    d = cells[q].copy()
+    d.attrs = cells[q].attrs
+    d.loc[d["cycle"] > 150, ["QD", "QDs"]] -= 0.05
+    F2 = tj.forecast({**cells, q: d}, 150)
+    a = F[F["cell"] == q].reset_index(drop=True)
+    b = F2[F2["cell"] == q].reset_index(drop=True)
+    for m in ("analogs_cycle", "analogs_state", "own_linear", "own_powerlaw", "population", "regression"):
+        assert np.allclose(a[m], b[m], equal_nan=True), m
+    assert not np.allclose(a["actual"], b["actual"])
+    S = tj.score(F)
+    assert (S["MAE_pct_points"] >= 0).all()

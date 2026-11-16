@@ -7,3 +7,4 @@ llm_trial/work/
 
 # per-cell features derived from local datasets
 reports/*/voltage_features_first*.csv
+reports/*/trajectory_first*.csv
