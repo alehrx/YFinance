@@ -102,7 +102,24 @@ def main():
     Q = Q[(Q["n_seen"] >= 4) & (Q["n_future"] >= 1)]
     print(f"{len(Q)} query cells:", Q.groupby("dataset").size().to_dict(), flush=True)
     chron = run_chronos(Q, curves)
+    for cond in ("A", "B", "C"):  # LLM forecasts (llm_trial/zero_shot_llm.py), if present
+        f = WORK / "llm" / f"llm_{cond}.csv"
+        if f.exists():
+            chron[f"llm_{cond}"] = pd.read_csv(f).set_index(["id"])
+            if f"llm_{cond}" not in METHODS:
+                METHODS.append(f"llm_{cond}")
+                STYLE[f"llm_{cond}"] = ({"A": "#332288", "B": "#882255", "C": "#117733"}[cond], "-")
     F = z.forecast(meta, curves, chron)
+    # combination rule, fixed before the LLM results were seen: equal-weight mean of the medians of the
+    # three zero-shot methods that tied (lib_shape, chronos2, own_linear), and the same plus llm_B
+    base = ["lib_shape", "chronos2", "own_linear"]
+    F["ensemble"] = F[base].mean(1, skipna=False)
+    if "llm_B" in F:
+        F["ensemble_llm"] = F[base + ["llm_B"]].mean(1, skipna=False)
+    for m in ("ensemble", "ensemble_llm"):
+        if m in F and m not in METHODS:
+            METHODS.append(m)
+            STYLE[m] = ("#000000", "-")
     F.to_csv(WORK / "zero_shot_forecasts.csv", index=False)
     pd.set_option("display.width", 250)
     # main comparison: every method incl. the within-dataset upper bound (datasets with >= 11 cells)
@@ -124,6 +141,17 @@ def main():
         r = stratified_ci(F, a_, b_)
         cis.append({"vs": f"{a_} - {b_} (secondary, post hoc)", **r})
         print(f"  {a_} - {b_} (post hoc): {r['diff']:+.2f} [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]")
+    # LLM comparisons, fixed before the LLM results were seen
+    llm_pairs = [("llm_A", "lib_shape"),   # does the LLM read the analogs better than their weighted mean?
+                 ("llm_B", "llm_A"),       # does chemistry, conditions and mechanism knowledge help?
+                 ("llm_B", "llm_C"),       # do the analogs help, given that knowledge?
+                 ("llm_B", "own_linear"), ("llm_B", "chronos2"), ("llm_C", "own_linear"),
+                 ("ensemble_llm", "ensemble"), ("ensemble", "own_linear")]
+    for a_, b_ in llm_pairs:
+        if a_ in F and b_ in F:
+            r = stratified_ci(F, a_, b_)
+            cis.append({"vs": f"{a_} - {b_} (LLM, pre-registered)", **r})
+            print(f"  {a_} - {b_} (LLM, pre-registered): {r['diff']:+.2f} [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]")
     pd.DataFrame(cis).to_csv(OUT / "zero_shot_ci.csv", index=False)
     fig_examples(F, curves, OUT / "figs" / "zero_shot_examples.png")
 

@@ -47,6 +47,12 @@ In short:
   - **Zero-shot forecast:** seeing a cell only down to 90 % SOH, analogs from *other* datasets,
     Chronos-2 and even the cell's own straight-line trend all forecast the rest to ~1.95 SOH points,
     against ~0.97 with a same-type database.
+  - **LLM, zero-shot** (`claude-opus-5-5`, blinded): given the curve to 90 %, the chemistry, the
+    conditions and analogs from other datasets, it forecasts the rest to 1.51 SOH points, beating
+    every non-LLM zero-shot method (−0.32 vs the linear trend, CI [−0.46, −0.19]). Most of the gain
+    comes from chemistry and mechanism knowledge, not the analogs: without analogs it scores 1.62.
+    Averaging the three tied methods (1.46) does about as well. It is wrong on cells that keep
+    decelerating, and the data are public, so it may have seen them.
   See [docs/results_zero_shot.md](docs/results_zero_shot.md).
 - **LLM trial:** a blinded LLM reading the same analogs ties overall (27 vs 28 cycles). It is worse on
   typical cells but far better on cells with no precedent, because it extrapolates beyond the
@@ -107,7 +113,7 @@ knee_analogs/
   trajectory.py         whole-future capacity-curve forecasts (analogs and baselines)
   zero_shot.py          cross-dataset forecasts from a cell's curve down to 90 % SOH
 run_study.py            runs everything for one dataset folder, writes reports/<dataset>/
-llm_trial/              blinded LLM trial: build prompts, score, plot
+llm_trial/              blinded LLM trials: knee prompts (Severson), zero-shot forecasts (zero_shot_llm.py)
 scripts/                data download helpers, dataset adapters (convert_lsd.py, convert_mohtat.py),
                         knee review (check_knees.py), voltage-feature comparison, trajectory_study.py,
                         build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py

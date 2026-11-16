@@ -119,13 +119,108 @@ Bootstrap 95 % CIs (cells resampled within datasets, mean over datasets):
    makes it worse: 2 C does not mean the same for LFP and NCA. Conditions need a physical translation
    (an Arrhenius factor, a plating-risk index), not raw numbers.
 
+## 3. Scenario A with an LLM (`llm_trial/zero_shot_llm.py`)
+
+**Fixed before any API call:**
+- **Model:** `claude-opus-5-5`, adaptive thinking, effort medium, structured JSON output.
+- **Prompts:** 10 query cells of one dataset per prompt, labelled Q1..Q10, with no dataset or cell names.
+  The analogs come only from other datasets, so no query's future appears in any prompt (checked by an
+  assert). Each query's curve is given as SOH at 0, 10, ..., 100 % of t90 plus the stopping point.
+- **Answer:** SOH at u = t / t90 = 1.25, 1.5, 1.75, 2, 2.5 and 3, as 10 / 50 / 90 % quantiles, plus one
+  sentence of reasoning. It is interpolated to the measured points and scored like every other method.
+- **Conditions:**
+  - **A:** the numbers plus the 10 shape-only library analogs (their pre-90 % shape and their future);
+  - **B:** A plus the chemistry and test conditions of the query and of each analog, and a short
+    neutral note on degradation mechanisms;
+  - **C:** B without the analogs: the curve, chemistry, conditions and mechanism knowledge only.
+- **Fixed after the run, before scoring** (harness reliability only):
+  - In 15 of 219 prompts the model answered for Q1 only, and one answer hit the token limit. Answers
+    that do not cover every cell are kept in `incomplete/` and the prompt is asked again, unchanged.
+  - 3 condition-A prompts were refused by the API's safety classifier (category "reasoning_extraction")
+    and went through on a plain retry, without rewording.
+  - All 707 cells now have a forecast in each condition.
+- **Cost:** $20.2 in total (2.41 M input and 0.53 M output tokens, including retries).
+- **Comparisons fixed before the LLM results were seen** (`scripts/zero_shot_study.py`):
+  - A vs the shape-only analogs, B vs A, B vs C, B and C vs the linear trend and Chronos-2;
+  - a combination rule: the equal-weight mean of the three tied zero-shot methods (shape-only analogs,
+    Chronos-2, linear trend), with and without LLM B. The three were picked from the table in section 2,
+    i.e. after seeing the non-LLM results.
+
+**Results** (same points as section 2; the non-LLM numbers are unchanged):
+
+| method | error (SOH points) | 1-1.5 t90 | 1.5-2 t90 | 2-3 t90 | band covers actual |
+|---|---|---|---|---|---|
+| analogs from the same dataset (upper bound) | 0.97 | 0.61 | 1.05 | 1.63 | 64 % |
+| **mean of analogs, Chronos-2, linear trend and LLM B** | **1.39** | 0.94 | 1.39 | 2.01 | - |
+| mean of analogs, Chronos-2 and linear trend | 1.46 | 1.02 | 1.48 | 2.05 | - |
+| **LLM B: curve + analogs + chemistry, conditions, mechanisms** | **1.51** | 0.83 | 1.50 | 2.59 | 75 % |
+| LLM C: curve + chemistry, conditions, mechanisms (no analogs) | 1.62 | 0.85 | 1.67 | 3.12 | 78 % |
+| LLM A: curve + analogs | 1.75 | 1.06 | 1.85 | 2.88 | 66 % |
+| library analogs, shape only | 1.94 | 1.35 | 1.96 | 2.96 | 45 % |
+| Chronos-2 | 1.95 | 1.16 | 1.80 | 3.20 | 79 % |
+| own linear trend | 1.99 | 1.40 | 1.57 | 2.32 | - |
+
+Per dataset (error, SOH points):
+
+| dataset | same-dataset analogs | library, shape | linear trend | LLM A | LLM B | LLM C | mean of 3 | mean of 3 + LLM B |
+|---|---|---|---|---|---|---|---|---|
+| LSD | 1.12 | 1.59 | 2.09 | 1.54 | **1.13** | 1.32 | 1.70 | 1.46 |
+| Mohtat | 1.52 | 1.75 | 1.58 | 1.67 | 1.45 | 1.46 | 1.49 | **1.33** |
+| Severson (LFP) | 0.61 | 2.08 | 3.48 | 1.46 | 1.14 | **1.02** | 1.47 | 1.32 |
+| Stanford dynamic | 0.92 | 3.32 | **1.99** | 3.36 | 3.21 | 3.60 | 2.03 | 2.21 |
+| Stanford matrix | 1.09 | 1.49 | 1.17 | 1.30 | 1.14 | 1.26 | 1.12 | **1.10** |
+| Tongji | 0.57 | 1.41 | 1.64 | 1.18 | 0.97 | 1.05 | 0.95 | **0.92** |
+
+Pre-registered comparisons (difference in error, bootstrap 95 % CI, cells resampled within datasets):
+
+| comparison | difference | 95 % CI | reading |
+|---|---|---|---|
+| LLM A − library analogs | −0.19 | [−0.31, −0.08] | the LLM reads the same analogs better than their weighted mean |
+| LLM B − LLM A | −0.38 | [−0.54, −0.24] | chemistry, conditions and mechanism knowledge help |
+| LLM B − LLM C | −0.07 | [−0.16, +0.02] | the analogs add little once that knowledge is given |
+| LLM B − own linear trend | −0.32 | [−0.46, −0.19] | |
+| LLM B − Chronos-2 | −0.47 | [−0.68, −0.24] | |
+| LLM C − own linear trend | −0.25 | [−0.39, −0.11] | knowledge alone, no ageing data at all |
+| mean of 3 + LLM B − mean of 3 | −0.07 | [−0.11, −0.05] | |
+| mean of 3 − own linear trend | −0.55 | [−0.67, −0.43] | |
+
+**What this says**
+
+1. **The LLM is the first zero-shot method that clearly beats the cell's own straight line.** With the
+   chemistry, conditions and mechanism note it reaches 1.51 SOH points, against ~1.95 for everything else.
+   That closes about 45 % of the gap to a same-type database (0.97). The gain is largest in the first
+   half of the horizon (0.83 vs 1.16-1.40 up to 1.5 t90).
+2. **What it needs is the physical context, not the analogs.** Removing the analogs costs only 0.07
+   (CI includes 0). Removing the chemistry and conditions costs 0.38. This fits the hypothesis "same
+   mechanisms, different speed": the model maps "LFP, fast charge" or "NCA, 45 °C" to a shape family,
+   which raw-number retrieval could not do (section 2, point 4).
+3. **Its bands are reasonably calibrated** (66-78 % inside a nominal 80 % band), close to Chronos-2 and
+   much better than the analogs.
+4. **It fails where the curve keeps decelerating.** On the Stanford EV cells, every LLM condition expects
+   too much fade (mean bias −4 to −5 points). It allows for a silicon-driven knee that does not come.
+   The linear trend is better there (1.99 vs 3.2).
+5. **A simple average is a strong competitor.** Averaging the analogs, Chronos-2 and the linear trend gives
+   1.46, about as good as the LLM, at no cost. Adding the LLM to the average gives the best result, 1.39.
+   These three methods err in different directions (e.g. on Severson, Chronos-2 forecasts too low and the
+   linear trend too high).
+
+**Caveats**
+- **Memorisation cannot be ruled out.** Severson, the Stanford sets, Tongji and Mohtat are public and
+  widely analysed. The prompts never name a dataset, but chemistry plus conditions (e.g. LFP 1.1 Ah with
+  fast charging) can identify one. Condition C doing well on Severson (1.02) could be knowledge of LFP
+  in general or recall of that paper. LSD is the cleanest case, if it is unpublished: LLM B 1.13 vs 1.59
+  for the analogs and 2.09 for the trend.
+- **One run per condition, no repeats:** the run-to-run spread of the LLM is not measured.
+- **The prompts and raw answers stay in `data/library/llm/`** (not committed): they contain the per-cell
+  curves.
+
 ## Not yet done
 
 - **Scenario B, accelerated → use conditions.** Only accelerated cells of a type observed to 90 %;
-  forecast cells of the same type at milder conditions, without observing them.
-- **LLM conditions** (numbers + analogs; + chemistry and mechanism knowledge; + operating history),
-  to be costed before any API call.
-- **A clean test on unpublished data:** Chronos and LLMs may have seen public datasets.
+  forecast cells of the same type at milder conditions, without observing them. This is where the LLM's
+  use of conditions would matter most.
+- **A clean test on unpublished data** (Chronos and LLMs may have seen the public datasets), and repeats
+  of the LLM run to measure its spread.
 
 Files:
 - `reports/library/universality_*.csv`, `zero_shot_overall.csv`, `zero_shot_by_dataset.csv`,
