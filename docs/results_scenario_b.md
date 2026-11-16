@@ -36,7 +36,7 @@ condition that was never tested?
 - **Leakage test:** a use cell's forecast does not change when its own data, or the accelerated cells'
   data after 90 %, change (`tests/test_knee_analogs.py`).
 
-**Cost:** 32 calls, $1.28 (Opus $1.23, Haiku $0.05).
+**Cost:** 32 calls, $1.28 (Opus $1.23, Haiku $0.05); 3 repeats: 98 calls, $3.80.
 
 ## Results
 
@@ -97,23 +97,73 @@ Comparisons (difference in error, 95 % CI):
 4. **The LLM halves the error of the data-only methods** (about 5 vs 10.6 points). It estimates the
    speed-up from chemistry and mechanisms. With the test data it gets the speed within a factor of
    1.3-1.6 on LSD, Mohtat and (Opus) the Stanford matrix.
-5. **The test data help, and how much depends on the case.** With data, Opus improves by 1.15 points
-   and Haiku by 0.49. Where both stresses act in opposite directions (Mohtat: cold and hot), the data
-   are essential (5.4 vs 10.4). Where the use condition is far outside the tested range (Stanford
-   matrix), knowledge alone does *better* (2.4-3.1) than with the data (7.6-10.6). The models anchor
-   on the fast tests.
+5. **The test data help on single runs, but not reliably (see Repeats).** On the first run, data
+   improved Opus by 1.15 points and Haiku by 0.49. Over 4 runs the gain shrinks to 0.53 and 0.12 and
+   its CI includes 0. By type: on Mohtat, where cold and heat both speed up ageing, the data matter
+   (5.4 vs 10.4 on the first run). On the Stanford matrix, where the use condition lies far outside
+   the tested range, knowledge alone did better: the models anchor on the fast tests.
 6. **The LLMs invent knees.** Opus gets LSD's speed almost right, but forecasts an early, steep knee
    (SOH 70 % by 1.4 × t90) that the cells do not show. Both models do the same on the Stanford matrix
-   after 1.5 × t90. Taking only the LLM's speed and the shared shape (post hoc) cuts Opus's error
-   from 5.61 to 3.87 points. The best split of labour: the LLM judges the speed, the data give the shape.
-7. **The small model is as good here** (Haiku 5.06 vs Opus 5.61): mostly because it predicts milder
-   knees, not because it judges the speed better.
-8. **Still far from a use-condition database** (+1.4 to +3 points). The method is a first estimate
-   before long tests, not a replacement for them.
+   after 1.5 × t90. Taking only Opus's speed with the shared shape (post hoc) gives 4.35 over 4 runs,
+   against 6.40 for its own curves. The best split of labour: the LLM judges the speed, the data give
+   the shape.
+7. **Haiku's own curves beat Opus's** (4.67 vs 6.40 over 4 runs), because it forecasts milder knees.
+   Opus judges the speed more consistently (see Repeats), so with the shared shape Opus is better
+   (4.35 vs 5.18).
+8. **Still far from a use-condition database** (+1.9 points for the best variant). The method is a
+   first estimate before long tests, not a replacement for them.
+
+## Repeats: how much does a single run vary?
+
+Each model and condition was asked 3 more times with identical prompts (96 calls, $3.80; two
+incomplete Haiku answers were re-asked). `scripts/scenario_b_repeats.py`. Fixed before the repeats
+were seen: score every run the same way, and combine runs by the median over the 4 runs of each
+forecast EFC.
+
+Error (SOH points, mean over types):
+
+| | single runs: mean ± sd | range | median of 4 runs |
+|---|---|---|---|
+| Opus, data | 6.80 ± 1.06 | 5.61-8.17 | 6.40 |
+| Opus, know | 6.47 ± 0.56 | 6.03-7.26 | 6.52 |
+| Haiku, data | 5.12 ± 0.59 | 4.71-5.97 | 4.67 |
+| Haiku, know | 4.94 ± 0.47 | 4.29-5.36 | 4.57 |
+| *post hoc:* Opus data speed + shared shape | 4.41 ± 0.38 | 3.87-4.72 | **4.35** |
+| *post hoc:* Haiku data speed + shared shape | 5.64 ± 0.52 | 4.95-6.11 | 5.18 |
+
+Spread of the predicted t90 across the 4 runs (max / min, median over target conditions):
+
+| | LSD | Mohtat | Tongji NCA | Tongji NCM | Stanford matrix |
+|---|---|---|---|---|---|
+| Opus, data | 1.09 | 1.25 | 1.24 | 1.07 | 1.58 |
+| Opus, know | 1.18 | 1.40 | 1.25 | 1.21 | 1.48 |
+| Haiku, data | 1.59 | 2.58 | 1.40 | 1.34 | 2.04 |
+| Haiku, know | 2.23 | 2.18 | 2.34 | 1.55 | 2.00 |
+
+Median-of-runs comparisons (95 % CI):
+- Opus data − Opus know: −0.53 [−1.27, +0.21];
+- Haiku data − Haiku know: −0.12 [−0.38, +0.17];
+- Haiku data − Opus data: −1.65 [−2.08, −1.21];
+- Opus data − speed_regression: −3.80 [−4.84, −2.69];
+- *post hoc:* Opus data speed + shared shape − Opus data: −1.87 [−2.25, −1.50];
+- *post hoc:* the same − use_database: +1.86 [+1.48, +2.26].
+
+**What the repeats change**
+- **A single run is not enough.** Opus's first run was its best of four (5.61; the others 6.7-8.2).
+  On the Stanford matrix its error varies by 5 points between runs. With one prompt per type, one
+  answer sets a whole type's forecast.
+- **The gain from the test data is not robust:** with runs combined, it is within the noise for both
+  models.
+- **What holds up:**
+  - the LLM beats fitting speed against conditions (−3.8 points);
+  - Opus's speed is stable across runs (within a factor of 1.1-1.6), while Haiku's varies by up to
+    2.6×;
+  - Opus's speed with the shared shape is the best and most stable variant (4.35, sd 0.38). That
+    combination is still post hoc.
 
 **Caveats**
-- **One run per model and condition; no repeats.** With one prompt per type, a single answer decides a
-  whole type's forecast, so the run-to-run spread could be large.
+- **Four runs per model and condition** measure the spread, but not every source of variation: the
+  prompt wording and the choice of a single prompt per type are fixed.
 - **Five types only;** the per-type CIs say nothing about how a new type would fare.
 - **The public datasets may be known to the models,** especially the Stanford and Tongji papers.
   "Knowledge only" doing well on the Stanford matrix could be recall.
@@ -121,7 +171,7 @@ Comparisons (difference in error, 95 % CI):
 
 Files:
 - `reports/library/scenario_b_by_type.csv`, `scenario_b_overall.csv`, `scenario_b_t90.csv`,
-  `scenario_b_ci.csv`;
+  `scenario_b_ci.csv`, `scenario_b_repeats.csv`, `scenario_b_repeats_t90.csv`, `scenario_b_repeats_ci.csv`;
 - `reports/library/figs/scenario_b_examples.png`.
 
 Prompts and answers stay in `data/library/llm/scenario_b/` (not committed).

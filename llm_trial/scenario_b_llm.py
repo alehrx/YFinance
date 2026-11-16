@@ -16,6 +16,7 @@ Conditions:
 
     python llm_trial/scenario_b_llm.py --model opus --dry-run
     python llm_trial/scenario_b_llm.py --model opus --conditions data know
+    python llm_trial/scenario_b_llm.py --model opus --repeat 1      # the same prompts asked again
 """
 
 from __future__ import annotations
@@ -176,11 +177,15 @@ def main():
     ap.add_argument("--model", choices=list(MODELS), default="opus")
     ap.add_argument("--conditions", nargs="+", default=["data", "know"])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--repeat", type=int, default=0, help="repeat number (1, 2, ...): same prompts, asked again")
     args = ap.parse_args()
     model, p_in, p_out, _ = MODELS[args.model]
     for cond in args.conditions:
-        name = f"{args.model}_{cond}"
+        name = f"{args.model}_{cond}" + (f"_r{args.repeat}" if args.repeat else "")
         prompts = build_prompts(cond)
+        if args.repeat:  # a new cache key, so the same prompt is asked again
+            for p in prompts:
+                p["key"] = hashlib.sha256((p["key"] + f"repeat{args.repeat}").encode()).hexdigest()[:16]
         n_tok = sum(len(SYSTEM + p["text"]) for p in prompts) / 3.5
         print(f"{name}: {len(prompts)} prompts, {sum(len(p['labels']) for p in prompts)} target conditions, "
               f"~{n_tok / 1e3:.0f}k input tokens (~${n_tok * p_in / 1e6:.2f} input)", flush=True)
@@ -192,7 +197,9 @@ def main():
         run(name, model, (p_in, p_out), prompts)
         fc, rs = collect(name, prompts)
         if len(fc):
-            fc.to_csv(WORK / f"{name}.csv", index=False)
+            out = WORK / "repeats" if args.repeat else WORK  # repeats stay out of the main table
+            out.mkdir(parents=True, exist_ok=True)
+            fc.to_csv(out / f"{name}.csv", index=False)
             rs.to_csv(WORK / "raw" / f"{name}_reasons.csv", index=False)
             print(f"  {name}: forecasts for {fc[['type', 'key']].drop_duplicates().shape[0]} target conditions")
 
