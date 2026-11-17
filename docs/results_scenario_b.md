@@ -301,6 +301,27 @@ both 1.1-1.3.
   A stop at 97 % (about 0.26 t90) gives 3.5 SOH points, 0.6-0.7 worse than the database. Time scaling stays
   worse than the database at every stop.
 
+#### What the forecasts look like (`scripts/fig_scenario_b_predictions.py`)
+
+![One typical cell per type, use test stopped later and later](../reports/library/figs/scenario_b_predictions_by_stop.png)
+
+![Good, typical and bad cells, stop at 96 %](../reports/library/figs/scenario_b_predictions_spread.png)
+
+What the figures show (descriptive, nothing was changed after looking):
+- **Knees are mostly missed.** Where a cell bends sharply after the stop (LSD, Tongji NCA and NCM bad
+  cells), every method, the database included, keeps a gentle slope. Slope scaling bends only when the
+  shared shape bends, and then sometimes too early (LSD bad cell).
+- **The forecast is not anchored to the cell's last measured SOH.** It is the shared shape stretched to a
+  predicted t90, so it can start a point or two away from the cell's last measurement (Tongji NCM,
+  library ratio). Anchoring it is an obvious next variant; it would have to be fixed before a new test.
+- **Sparse curves:** Mohtat and Stanford have few check-ups, so the slope between 99 and 98 % (or 97 and
+  96 %) rests on two or three points; that is where slope scaling is noisiest.
+- **Very fast Stanford cells:** a few reach 90 % within 2-25 EFC (e.g. `seq201`, 2.3 EFC). They are early
+  failures or a data problem; they are scored as they are.
+- **The single-cell picture is not monotone:** the LSD cell in the first figure is the typical cell at
+  96 %, and its error is larger at the other stops. The mean error falls steadily with the stop
+  (figure above), single cells do not.
+
 **Caveats:** cells resampled within only 5 types; Mohtat has no real short test; the first two methods
 cannot be told apart statistically from the straight line.
 
@@ -319,6 +340,7 @@ Files:
   `scenario_b_early2.csv`, `scenario_b_early2_ci.csv`, `scenario_b_early2_t90.csv`,
   `scenario_b_tradeoff.csv`;
 - `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`,
-  `scenario_b_tradeoff.png`.
+  `scenario_b_tradeoff.png`,
+  `scenario_b_predictions_by_stop.png`, `scenario_b_predictions_spread.png`.
 
 Prompts and answers stay in `data/library/llm/scenario_b/` (not committed).
