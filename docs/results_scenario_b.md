@@ -292,6 +292,15 @@ both 1.1-1.3.
   The no-test row is measured on all points from the start of life, the others only after their stop,
   so the rows are not strictly comparable.
 
+  ![Trade-off between use-test length and error](../reports/library/figs/scenario_b_tradeoff.png)
+
+  The figure (`scripts/fig_scenario_b_tradeoff.py`) adds stops at 97 % and 96 % SOH between the two
+  pre-registered ones, only to draw the curve; the methods are unchanged. Panel (b) compares each method with
+  the database on the same points, which removes the problem of differently scored rows. Slope scaling
+  matches the database from a stop at 96 % (about 0.37 t90; −0.04 [−0.44, +0.37]) and beats it at 95 %.
+  A stop at 97 % (about 0.26 t90) gives 3.5 SOH points, 0.6-0.7 worse than the database. Time scaling stays
+  worse than the database at every stop.
+
 **Caveats:** cells resampled within only 5 types; Mohtat has no real short test; the first two methods
 cannot be told apart statistically from the straight line.
 
@@ -307,7 +316,9 @@ Files:
 - `reports/library/scenario_b_by_type.csv`, `scenario_b_overall.csv`, `scenario_b_t90.csv`,
   `scenario_b_ci.csv`, `scenario_b_repeats.csv`, `scenario_b_repeats_t90.csv`, `scenario_b_repeats_ci.csv`;
 - `reports/library/scenario_b_early.csv`, `scenario_b_early_ci.csv`, `scenario_b_early_t90.csv`,
-  `scenario_b_early2.csv`, `scenario_b_early2_ci.csv`, `scenario_b_early2_t90.csv`;
-- `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`.
+  `scenario_b_early2.csv`, `scenario_b_early2_ci.csv`, `scenario_b_early2_t90.csv`,
+  `scenario_b_tradeoff.csv`;
+- `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`,
+  `scenario_b_tradeoff.png`.
 
 Prompts and answers stay in `data/library/llm/scenario_b/` (not committed).
