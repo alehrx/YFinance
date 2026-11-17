@@ -3,10 +3,10 @@ use condition until SOH reaches the stop level; the rest of its curve (to 3 x t9
 
     python scripts/fig_scenario_b_predictions.py            # --replot: reuse the cached forecasts
 
-1. scenario_b_predictions_by_stop.png: one cell per type (the median-error cell of slope_accel at the 96 %
+1. scenario_b_predictions_by_stop.png: one cell per type (the median-error cell of slope_accel_anch at the 96 %
    stop), with the use test stopped at 98, 97, 96 and 95 % SOH (rows).
 2. scenario_b_predictions_spread.png: stop at 96 %; per type the cells at the 10th, 50th and 90th
-   percentile of the slope_accel error (good, typical, bad).
+   percentile of the slope_accel_anch error (good, typical, bad).
 
 The per-cell forecasts are cached in data/library/scenario_b_early/ (gitignored).
 """
@@ -34,8 +34,9 @@ mm = 1 / 25.4
 LEVELS = (0.98, 0.97, 0.96, 0.95)
 REF_LEVEL = 0.96
 STYLE = {  # colour, line style, label
-    "slope_accel": ("#D55E00", "-", "slope scaling, accelerated cells' ratio"),
-    "slope_library": ("#E69F00", "--", "slope scaling, library ratio"),
+    "slope_accel": ("#D55E00", (0, (1.5, 1.5)), "slope scaling, accelerated cells' ratio, not anchored"),
+    "slope_accel_anch": ("#D55E00", "-", "slope scaling, accelerated cells' ratio, anchored"),
+    "slope_library_anch": ("#E69F00", "--", "slope scaling, library ratio, anchored"),
     "early_linear": ("#0072B2", ":", "own straight line"),
     "use_database": ("#009E73", "-.", "use-condition database (other cells)"),
 }
@@ -56,7 +57,7 @@ def forecasts(replot):
     return P
 
 
-def cell_error(D, m="slope_accel"):
+def cell_error(D, m="slope_accel_anch"):
     return (D[m] - D["actual"]).abs().groupby(D["id"]).mean() * 100
 
 
@@ -70,14 +71,16 @@ def panel(ax, curves, D, cid, show_err=True):
             label="actual (not seen)")
     for m, (c, ls, lab) in STYLE.items():
         if g[m].notna().any():
-            ax.plot(g["efc"], g[m] * 100, color=c, ls=ls, lw=0.9, label=lab)
+            ax.plot(g["efc"], g[m] * 100, color=c, ls=ls, lw=0.9 if m != "slope_accel" else 0.6,
+                    alpha=1 if m != "slope_accel" else 0.6, label=lab)
     lo = np.nanmin([s[t <= tend].min()] + [g[m].min() for m in STYLE]) * 100
     ax.set_ylim(max(lo - 2, 40), 101)
     ax.set_xlim(0, tend * 1.03)
     ax.tick_params(labelsize=SMALL, length=2)
     if show_err:
-        e = {m: (g[m] - g["actual"]).abs().mean() * 100 for m in ("slope_accel", "use_database")}
-        ax.text(0.97, 0.95, f"slope {e['slope_accel']:.1f}\ndatabase {e['use_database']:.1f}",
+        e = {m: (g[m] - g["actual"]).abs().mean() * 100 for m in ("slope_accel_anch", "slope_accel", "use_database")}
+        ax.text(0.97, 0.95, f"anchored {e['slope_accel_anch']:.1f}\nnot anch. {e['slope_accel']:.1f}\n"
+                f"database {e['use_database']:.1f}",
                 transform=ax.transAxes, ha="right", va="top", fontsize=SMALL, color="0.25", linespacing=1.1)
 
 
@@ -135,8 +138,8 @@ def main():
                 axes[i, j].text(-0.42, 0.5, name, transform=axes[i, j].transAxes, rotation=90, ha="center",
                                 va="center", fontsize=FS, weight="bold")
     finish(fig, axes, OUT / "scenario_b_predictions_spread.png",
-           "Use test stopped at 96 % SOH (shaded): good, typical and bad cells by the error of slope scaling "
-           "(accelerated cells' ratio); MAE in SOH points")
+           "Use test stopped at 96 % SOH (shaded): good, typical and bad cells by the error of anchored slope "
+           "scaling (accelerated cells' ratio); MAE in SOH points")
 
 
 if __name__ == "__main__":

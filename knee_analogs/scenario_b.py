@@ -107,6 +107,21 @@ def curve_from_shape(sh, t90, t):
     return out
 
 
+def curve_from_shape_anchored(sh, t_level, level, t90, t):
+    """The shared shape forced through the use cell's own crossing of the stop level, (t_level, level), and
+    through (t90, 90 %): the shape's part from ``level`` down is stretched between the two points; beyond
+    t90 the same stretch continues. NaN if t90 <= t_level."""
+    if not (np.isfinite(t90) and np.isfinite(t_level) and t90 > t_level):
+        return np.full(len(t), np.nan)
+    ok = np.isfinite(sh)
+    us, ss = U_SHAPE[ok], sh[ok]
+    i = int(np.argmax(ss <= level))  # first grid point at or below the level
+    u_l = us[0] if i == 0 else float(np.interp(level, [ss[i], ss[i - 1]], [us[i], us[i - 1]]))
+    u_l = min(u_l, 0.999)
+    u = u_l + (np.asarray(t, float) - t_level) * (1 - u_l) / (t90 - t_level)
+    return curve_from_shape(sh, 1.0, u)
+
+
 def curve_from_levels(levels, efc, t):
     """SOH at EFC t from (SOH level, EFC) pairs, through (0, 100 %); beyond the last level the last slope."""
     e = np.r_[0.0, np.maximum.accumulate(np.asarray(efc, float))]
@@ -211,6 +226,12 @@ def score(P: pd.DataFrame, methods: list[str]) -> tuple[pd.DataFrame, pd.Series]
 # * ``slope_accel+llm``: geometric mean of the slope_accel t90 and Opus's t90 (data, median of runs).
 # Compared with speed_regression, the Opus (data, median of runs) curve, oracle_speed and use_database
 # on the same points.
+# Added before the third run (anchoring), fixed before it was run; motivated by the figures of the
+# second run (forecasts that start a point or two away from the cell's last measurement):
+# * ``<method>_anch`` for every t90 method above and oracle_speed: the same t90, but the curve is forced
+#   through the cell's own crossing of the stop level, (t_LEVEL, LEVEL), with curve_from_shape_anchored.
+#   Primary comparisons: slope_accel_anch vs slope_accel, use_database and early_linear at the 98 % and
+#   95 % stops; 97 % and 96 % only to draw the trade-off curve.
 
 
 def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.DataFrame:
@@ -263,10 +284,12 @@ def forecast_early(meta, curves, level=0.98, llm_t90: dict | None = None) -> pd.
                 if "slope_accel" in pred:
                     pred["slope_accel+llm"] = float(np.sqrt(pred["slope_accel"] * llm_t90[(typ, key)]))
             out = {k: curve_from_shape(sh, v, tt) for k, v in pred.items()}
+            out.update({f"{k}_anch": curve_from_shape_anchored(sh, tx_seen, level, v, tt) for k, v in pred.items()})
             m = (ts > tx_seen / 2) & (ts <= t_stop)
             slope = np.polyfit(ts[m], ss[m], 1)[0] if m.sum() >= 2 else (ss[-1] - 1.0) / ts[-1]
             out["early_linear"] = ss[-1] + slope * (tt - ts[-1])
             out["oracle_speed"] = curve_from_shape(sh, t90, tt)
+            out["oracle_speed_anch"] = curve_from_shape_anchored(sh, tx_seen, level, t90, tt)
             others = [o for o in use if o != c]
             G = np.array([np.interp(tt, *curves[o], left=np.nan, right=np.nan) for o in others])
             with np.errstate(all="ignore"):

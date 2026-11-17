@@ -133,7 +133,7 @@ scripts/                data download helpers, dataset adapters (convert_lsd.py,
                         build_library.py, universality.py, zero_shot_study.py, chronos_forecast.py,
                         fig_zero_shot_llm.py, scenario_b_study.py, scenario_b_repeats.py,
                         scenario_b_early.py, scenario_b_early2.py, fig_scenario_b_tradeoff.py,
-                        fig_scenario_b_predictions.py
+                        fig_scenario_b_predictions.py, scenario_b_anchor.py
 docs/                   results write-ups per dataset
 reports/<dataset>/      tables (.csv) and figures (.png/.pdf)
 tests/                  synthetic-cell tests: knee detection, de-duplication, no self-matching

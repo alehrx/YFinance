@@ -1,5 +1,5 @@
 """Figure: the trade-off between the length of the short test at the use condition and the forecast error
-(Scenario B / B+). Descriptive: the stop levels 97 % and 96 % are added between the two pre-registered ones
+(Scenario B / B+), with the anchored forecasts of scripts/scenario_b_anchor.py. Descriptive: the stop levels 97 % and 96 % are added between the two pre-registered ones
 (98 %, 95 %) to draw the curve; the methods are unchanged (knee_analogs/scenario_b.py, forecast_early).
 
     python scripts/fig_scenario_b_tradeoff.py            # --replot: redraw from the saved table
@@ -31,20 +31,25 @@ OUT = ROOT / "reports" / "library"
 plt.style.use(str(ROOT / "journal.mplstyle"))
 mm = 1 / 25.4
 LEVELS = (0.98, 0.97, 0.96, 0.95)
-METHODS = ["slope_accel", "slope_library", "early_linear", "early_accel", "oracle_speed", "use_database"]
+CACHE = ROOT / "data" / "library" / "scenario_b_early"  # written by scripts/scenario_b_anchor.py
+METHODS = ["slope_accel_anch", "slope_library_anch", "slope_accel", "early_linear", "early_accel_anch",
+           "oracle_speed_anch", "use_database"]
 STYLE = {  # colour, marker, label
-    "slope_accel": ("#D55E00", "o", "slope scaling, accelerated cells' ratio"),
-    "slope_library": ("#E69F00", "s", "slope scaling, library ratio"),
+    "slope_accel_anch": ("#D55E00", "o", "slope scaling, accelerated cells' ratio, anchored"),
+    "slope_library_anch": ("#E69F00", "s", "slope scaling, library ratio, anchored"),
+    "slope_accel": ("#D55E00", "o", "slope scaling, accelerated cells' ratio, not anchored"),
     "early_linear": ("#0072B2", "^", "own straight line"),
-    "early_accel": ("#CC79A7", "v", "time scaling, accelerated cells' ratio"),
+    "early_accel_anch": ("#CC79A7", "v", "time scaling, accelerated cells' ratio, anchored"),
 }
+FADED = {"slope_accel", "early_accel_anch"}
 
 
 def compute():
     meta, curves = z.load_library()
     rows = []
     for level in LEVELS:
-        P = b.forecast_early(meta, curves, level)
+        f = CACHE / f"forecast_{level:.2f}.csv.gz"
+        P = pd.read_csv(f) if f.exists() else b.forecast_early(meta, curves, level)
         _, O = b.score(P, METHODS)
         C = P.drop_duplicates("id")
         x = (C["t_stop"] / C["t90_true"]).groupby(C["type"]).median().mean()
@@ -77,25 +82,26 @@ def plot(T):
     # references: the database and the true speed, on the same points as each stop (x > 0); at x = 0 the
     # whole curve is scored, so those points stand apart and are not joined to the line
     for m, ls, mk, lab in [("use_database", "--", "D", "use-condition database (a full ageing campaign)"),
-                           ("oracle_speed", ":", "x", "true speed (reference, not available in practice)")]:
+                           ("oracle_speed_anch", ":", "x", "true speed, anchored (reference, not available in practice)")]:
         h, = a1.plot(test(m)["x"], test(m)["MAE"], color="0.4", ls=ls, lw=0.9, label=lab)
-        a1.plot(0, g(m)["MAE"].iloc[0], mk, color="0.4", ms=3, mfc="none", mew=0.7)
+        a1.plot(0, g(m.replace("_anch", ""))["MAE"].iloc[0], mk, color="0.4", ms=3, mfc="none", mew=0.7)
         handles.append(h)
     for m, (c, mk, lab) in STYLE.items():
-        h, = a1.plot(test(m)["x"], test(m)["MAE"], color=c, marker=mk, ms=3.5,
-                     lw=1.1 if m != "early_accel" else 0.8, alpha=1 if m != "early_accel" else 0.55, label=lab)
+        h, = a1.plot(test(m)["x"], test(m)["MAE"], color=c, marker=mk, ms=3.5 if m not in FADED else 2.5,
+                     lw=1.1 if m not in FADED else 0.7, alpha=1 if m not in FADED else 0.45,
+                     ls="-" if m != "slope_accel" else "--", mfc=c if m != "slope_accel" else "none", label=lab)
         handles.append(h)
     L = g("llm_speed+shape")
     h, = a1.plot(L["x"], L["MAE"], "*", color="#882255", ms=8, label="no use test: LLM speed + accelerated shape")
     handles.append(h)
     a1.annotate(f"{L['MAE'].iloc[0]:.1f}", (0, L["MAE"].iloc[0]), xytext=(5, 2), textcoords="offset points",
                 fontsize=small, color="#882255")
-    for (m, level), xy in {("slope_accel", 0.98): (-15, -1), ("slope_library", 0.98): (-15, -3),
-                           ("slope_accel", 0.95): (5, -9), ("slope_library", 0.95): (5, 3)}.items():
+    for (m, level), xy in {("slope_accel_anch", 0.98): (-15, -1), ("slope_library_anch", 0.98): (-15, -3),
+                           ("slope_accel_anch", 0.95): (5, -9), ("slope_library_anch", 0.95): (5, 3)}.items():
         r = test(m)[test(m)["level"] == level].iloc[0]
         a1.annotate(f"{r['MAE']:.1f}", (r["x"], r["MAE"]), xytext=xy, textcoords="offset points",
                     fontsize=small, color=STYLE[m][0])
-    for m, lab in [("use_database", "database"), ("oracle_speed", "true speed")]:
+    for m, lab in [("use_database", "database"), ("oracle_speed", "true speed")]:  # x = 0: not anchored
         a1.annotate(lab, (0, g(m)["MAE"].iloc[0]), xytext=(5, -2), textcoords="offset points", fontsize=small,
                     color="0.4")
     a1.text(0.0, 1.15, "x = 0: whole curve scored", fontsize=small, color="0.4")
@@ -113,10 +119,12 @@ def plot(T):
     a2.text(0.005, -0.12, "as good as the database", fontsize=small, ha="left", va="top", color="0.4")
     for m, (c, mk, _) in {**STYLE, "llm_speed+shape": ("#882255", "*", "")}.items():
         s = g(m)
-        a2.errorbar(s["x"] + {"slope_accel": -0.007, "early_linear": 0.007, "early_accel": 0.014}.get(m, 0),
+        if m == "slope_accel":
+            continue
+        a2.errorbar(s["x"] + {"slope_accel_anch": -0.007, "early_linear": 0.007, "early_accel_anch": 0.014}.get(m, 0),
                     s["diff"], yerr=[s["diff"] - s["ci_lo"], s["ci_hi"] - s["diff"]], color=c, marker=mk,
                     ms=3.5 if mk != "*" else 8, lw=1.1 if mk != "*" else 0, elinewidth=0.7, capsize=1.5,
-                    alpha=1 if m != "early_accel" else 0.55)
+                    alpha=1 if m not in FADED else 0.45)
     a2.set_ylabel("error minus database error (SOH points)", fontsize=fs)
     a2.set_title("(b) relative to the database, same points, 95 % CI", loc="left", fontsize=fs)
     for ax in (a1, a2):

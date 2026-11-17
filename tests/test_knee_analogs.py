@@ -349,7 +349,8 @@ def test_scenario_b_early_never_sees_the_use_cell_after_its_short_test():
     a = P[P["id"] == q].set_index("efc")
     c2 = P2[P2["id"] == q].set_index("efc")
     common = a.index.intersection(c2.index)
-    for m in ("early_accel", "early_library", "early_linear", "speed_regression", "slope_accel", "slope_library"):
+    for m in ("early_accel", "early_library", "early_linear", "speed_regression", "slope_accel", "slope_library",
+              "slope_accel_anch", "slope_library_anch", "early_accel_anch", "early_library_anch"):
         assert np.allclose(a.loc[common, m], c2.loc[common, m]), m
     P95 = b.forecast_early(meta, curves, level=0.95)  # also for a later stop
     _, t_stop95 = z.t_at(t, s, level=0.95, with_stop=True)
@@ -360,3 +361,11 @@ def test_scenario_b_early_never_sees_the_use_cell_after_its_short_test():
     common = a.index.intersection(c3.index)
     for m in ("early_accel", "slope_accel", "slope_library"):
         assert np.allclose(a.loc[common, m], c3.loc[common, m]), m
+    # anchored curves start at the stop level where the cell crossed it, and keep the predicted t90
+    g = P95[P95["id"] == q]
+    tx = z.t_at(t, s, level=0.95)
+    from knee_analogs.scenario_b import curve_from_shape_anchored  # noqa: F401
+    assert g["slope_accel_anch"].notna().all()
+    first = g.sort_values("efc").iloc[0]
+    assert abs(first["slope_accel_anch"] - 0.95) < 0.95 - first["actual"] + 0.01
+    assert first["efc"] > tx

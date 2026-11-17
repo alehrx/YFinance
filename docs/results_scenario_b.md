@@ -295,7 +295,8 @@ both 1.1-1.3.
   ![Trade-off between use-test length and error](../reports/library/figs/scenario_b_tradeoff.png)
 
   The figure (`scripts/fig_scenario_b_tradeoff.py`) adds stops at 97 % and 96 % SOH between the two
-  pre-registered ones, only to draw the curve; the methods are unchanged. Panel (b) compares each method with
+  pre-registered ones, only to draw the curve. It now shows the anchored forecasts of the third round
+  (below); the numbers in this paragraph are the earlier, unanchored ones. Panel (b) compares each method with
   the database on the same points, which removes the problem of differently scored rows. Slope scaling
   matches the database from a stop at 96 % (about 0.37 t90; −0.04 [−0.44, +0.37]) and beats it at 95 %.
   A stop at 97 % (about 0.26 t90) gives 3.5 SOH points, 0.6-0.7 worse than the database. Time scaling stays
@@ -311,9 +312,9 @@ What the figures show (descriptive, nothing was changed after looking):
 - **Knees are mostly missed.** Where a cell bends sharply after the stop (LSD, Tongji NCA and NCM bad
   cells), every method, the database included, keeps a gentle slope. Slope scaling bends only when the
   shared shape bends, and then sometimes too early (LSD bad cell).
-- **The forecast is not anchored to the cell's last measured SOH.** It is the shared shape stretched to a
-  predicted t90, so it can start a point or two away from the cell's last measurement (Tongji NCM,
-  library ratio). Anchoring it is an obvious next variant; it would have to be fixed before a new test.
+- **The forecast was not anchored to the cell's last measured SOH.** It was the shared shape stretched to
+  a predicted t90, so it could start a point or two away from the cell's last measurement. The third
+  round (below) anchors it; the figures now show both.
 - **Sparse curves:** Mohtat and Stanford have few check-ups, so the slope between 99 and 98 % (or 97 and
   96 %) rests on two or three points; that is where slope scaling is noisiest.
 - **Very fast Stanford cells:** a few reach 90 % within 2-25 EFC (e.g. `seq201`, 2.3 EFC). They are early
@@ -321,6 +322,46 @@ What the figures show (descriptive, nothing was changed after looking):
 - **The single-cell picture is not monotone:** the LSD cell in the first figure is the typical cell at
   96 %, and its error is larger at the other stops. The mean error falls steadily with the stop
   (figure above), single cells do not.
+
+### Third round: anchoring the forecast to the cell (`scripts/scenario_b_anchor.py`)
+
+The rule (`curve_from_shape_anchored`, fixed in the code before the run): keep each method's predicted
+t90, but force the curve through the point where the use cell itself crossed the stop level, (t_L, L).
+The shared shape's part from L downwards is stretched between (t_L, L) and (t90, 90 %), and the same
+stretch continues after t90. It was motivated by the figures of the second round, i.e. by looking at
+these test cells, so it is not a clean pre-registered test; it needs confirming on new cells.
+
+Error in SOH points, mean over types; each stop on its own points:
+
+| method | 98 % | 97 % | 96 % | 95 % |
+|---|---|---|---|---|
+| true speed, not anchored / anchored (reference) | 1.78 / 1.44 | 1.80 / 1.36 | 1.82 / 1.29 | 1.83 / 1.23 |
+| use-condition database | 2.77 | 2.88 | 3.02 | 3.18 |
+| slope scaling, accelerated ratio: not anchored | 4.53 | 3.54 | 2.98 | 2.67 |
+| slope scaling, accelerated ratio: **anchored** | **4.44** | **3.37** | **2.69** | **2.36** |
+| slope scaling, library ratio: not anchored | 3.89 | 3.46 | 3.11 | 2.78 |
+| slope scaling, library ratio: **anchored** | **3.67** | **3.22** | **2.78** | **2.39** |
+| own straight line | 5.01 | 4.13 | 3.37 | 2.64 |
+
+Primary comparisons (95 % stratified bootstrap CI):
+
+| | 98 % | 95 % |
+|---|---|---|
+| slope_accel anchored − not anchored | −0.10 [−0.13, −0.07] | −0.32 [−0.38, −0.25] |
+| slope_accel anchored − database | +1.67 [+1.21, +2.10] | −0.82 [−1.17, −0.49] |
+| slope_accel anchored − straight line | −0.71 [−1.96, +0.51] | −0.32 [−1.02, +0.28] |
+
+- **Anchoring helps every method at every stop, but modestly:** 0.1-0.3 points for slope scaling with
+  the accelerated ratio, 0.2-0.4 with the library ratio, under 0.1 for time scaling. The gain grows
+  with the stop, as the offset it removes matters more once the forecast speed is right.
+- **The shape error falls more:** the true-speed reference drops from about 1.8 to 1.2-1.4. So about
+  a third of the shape error was the offset at the start, not the shape itself.
+- **Break-even with the database moves earlier:** slope scaling now equals the database between the
+  97 % and 96 % stops (+0.50 [+0.08, +0.91] at 97 %, −0.32 [−0.72, +0.07] at 96 %) and beats it at 95 %.
+  At 98 % it is still 1.7 points worse.
+- **Against the own straight line, still not significant at any stop,** though the anchored slope
+  scaling is lower at all four.
+- **Knees are still missed** (see the figures): anchoring fixes the start, not the bend.
 
 **Caveats:** cells resampled within only 5 types; Mohtat has no real short test; the first two methods
 cannot be told apart statistically from the straight line.
@@ -338,7 +379,7 @@ Files:
   `scenario_b_ci.csv`, `scenario_b_repeats.csv`, `scenario_b_repeats_t90.csv`, `scenario_b_repeats_ci.csv`;
 - `reports/library/scenario_b_early.csv`, `scenario_b_early_ci.csv`, `scenario_b_early_t90.csv`,
   `scenario_b_early2.csv`, `scenario_b_early2_ci.csv`, `scenario_b_early2_t90.csv`,
-  `scenario_b_tradeoff.csv`;
+  `scenario_b_tradeoff.csv`, `scenario_b_anchor.csv`, `scenario_b_anchor_ci.csv`;
 - `reports/library/figs/scenario_b_examples.png`, `scenario_b_early_examples.png`,
   `scenario_b_tradeoff.png`,
   `scenario_b_predictions_by_stop.png`, `scenario_b_predictions_spread.png`.
